@@ -1,0 +1,96 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// User / TeamMember model
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  role      String   // e.g., "Full-Stack", "Front-End", "Back-End"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tasks     Task[]
+}
+
+// Project model that links to a GitHub Repository
+model Project {
+  id            Int                @id @default(autoincrement())
+  name          String
+  githubRepoUrl String
+  owner         String
+  repoName      String
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  designs       DatabaseDesign[]
+  syncAlerts    SyncAlert[]
+  docJobs       DocumentationJob[]
+  codeReviews   CodeReviewResult[]
+}
+
+// Visual Database Designer Model
+model DatabaseDesign {
+  id              Int      @id @default(autoincrement())
+  name            String
+  canvasData      String   // JSON string storing node details, positions, table columns, etc.
+  generatedScript String?  // SQL/NoSQL export script
+  dbType          String   // e.g., "postgresql", "mysql", "mongodb"
+  projectId       Int?
+  project         Project? @relation(fields: [projectId], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// Fair Task Allocator Task Model
+model Task {
+  id             Int      @id @default(autoincrement())
+  title          String
+  description    String?
+  estimatedHours Float
+  assignedToId   Int?
+  assignedTo     User?    @relation(fields: [assignedToId], references: [id])
+  status         String   @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// Visual Branch Synchronizer Alert Model
+model SyncAlert {
+  id               Int      @id @default(autoincrement())
+  projectId        Int
+  project          Project  @relation(fields: [projectId], references: [id])
+  branchName       String   @default("main")
+  behindByCommits  Int      @default(0)
+  latestCommitSha  String?
+  status           String   @default("UP_TO_DATE") // BEHIND, UP_TO_DATE
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+// Rapid Documentation Generator Job Model
+model DocumentationJob {
+  id              Int      @id @default(autoincrement())
+  projectId       Int
+  project         Project  @relation(fields: [projectId], references: [id])
+  generatedReadme String?
+  status          String   @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// AI-Powered Code Review Result Model
+model CodeReviewResult {
+  id                Int      @id @default(autoincrement())
+  projectId         Int
+  project           Project  @relation(fields: [projectId], references: [id])
+  pullRequestNumber Int?
+  findings          String   // JSON string containing review findings, comments, code diff suggestions
+  status            String   @default("PENDING") // PENDING, COMPLETED, FAILED
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}

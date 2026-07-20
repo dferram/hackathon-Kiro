@@ -1,0 +1,28 @@
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+
+# Environment variables (secret credentials)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Local SQLite databases used by Prisma
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Editor / OS directories
+.DS_Store
+.vscode/
+.idea/
+Thumbs.db
