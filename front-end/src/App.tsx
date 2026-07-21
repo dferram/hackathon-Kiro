@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import {
   Database,
   Plus,
@@ -30,6 +30,51 @@ interface Column {
   isForeignKey: boolean
   foreignKeyTargetTableId?: string
   foreignKeyTargetColumnId?: string
+}
+
+// Helper to escape HTML characters
+const escapeHtml = (text: string) => {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
+// Custom shorthand syntax highlighter
+const highlightShorthand = (code: string) => {
+  const lines = code.split('\n')
+  return lines.map(line => {
+    // Comments
+    if (line.trim().startsWith('#') || line.trim().startsWith('//')) {
+      return `<span class="editor-comment">${escapeHtml(line)}</span>`
+    }
+    
+    let highlighted = escapeHtml(line)
+    
+    // Highlight table block declaration (e.g. users { )
+    const tableMatch = line.match(/^([a-zA-Z0-9_]+)\s*\{/)
+    if (tableMatch) {
+      const name = tableMatch[1]
+      highlighted = highlighted.replace(name, `<span class="editor-table-name">${name}</span>`)
+    }
+    
+    // Keywords
+    highlighted = highlighted
+      .replace(/\bpk\b/g, '<span class="editor-keyword">pk</span>')
+      .replace(/\bprimary\b/g, '<span class="editor-keyword">primary</span>')
+      .replace(/\bfk\b/g, '<span class="editor-keyword">fk</span>')
+      
+    // Types
+    const types = ['UUID', 'String', 'Timestamp', 'Decimal', 'Integer', 'Boolean', 'Text', 'DateTime', 'Int']
+    types.forEach(t => {
+      const regex = new RegExp(`\\b${t}\\b`, 'g')
+      highlighted = highlighted.replace(regex, `<span class="editor-type">${t}</span>`)
+    })
+    
+    return highlighted
+  }).join('\n')
 }
 
 interface Table {
@@ -80,6 +125,15 @@ export default function App() {
   const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
   const [activeMenuTab, setActiveMenuTab] = useState<string>('TABLES')
   const [notification, setNotification] = useState<string | null>(null)
+
+  // Split View Editor state
+  const [isSplitView, setIsSplitView] = useState<boolean>(true)
+  const [editorTab, setEditorTab] = useState<'shorthand' | 'sql'>('shorthand')
+  const [showToast, setShowToast] = useState<boolean>(true)
+  const [importCode, setImportCode] = useState<string>(
+    '# Escribe tus tablas aquí en código simple:\n\nusers {\n  id UUID pk\n  email String\n  created_at Timestamp\n}\n\norders {\n  id UUID pk\n  user_id UUID fk users.id\n  total Decimal\n}'
+  )
+  const [importError, setImportError] = useState<string | null>(null)
 
   // Dragging table node state
   const [draggingTableId, setDraggingTableId] = useState<string | null>(null)
@@ -171,6 +225,117 @@ export default function App() {
     setSelectedTableId(newId)
     showNotification('Created new table')
   }
+
+  // Real-time shorthand code parsing effect
+  useEffect(() => {
+    const parse = () => {
+      try {
+        setImportError(null)
+        const parsedTables: Table[] = []
+
+        // Match table definitions block: TableName { ... }
+        const blocks = importCode.match(/([a-zA-Z0-9_]+)\s*\{([^}]+)\}/g)
+        if (!blocks) return
+
+        const tempFKsToResolve: Array<{
+          tableId: string
+          colId: string
+          targetTableName: string
+          targetColName: string
+        }> = []
+
+        blocks.forEach((block, index) => {
+          const headerMatch = block.match(/^([a-zA-Z0-9_]+)\s*\{/)
+          if (!headerMatch) return
+          const tableName = headerMatch[1]
+          const tableId = tableName.toLowerCase()
+
+          const bodyContent = block.substring(block.indexOf('{') + 1, block.lastIndexOf('}'))
+          const lines = bodyContent.split('\n')
+            .map(l => l.trim())
+            .filter(l => l.length > 0 && !l.startsWith('#') && !l.startsWith('//'))
+
+          const columns: Column[] = lines.map((line, colIndex) => {
+            const parts = line.split(/\s+/).filter(p => p.length > 0)
+            if (parts.length < 2) return null
+            const colName = parts[0]
+            const colType = parts[1]
+            const isPK = parts.includes('pk') || parts.includes('primary')
+
+            let isFK = false
+            let targetTable = ''
+            let targetCol = ''
+
+            const fkIndex = parts.indexOf('fk')
+            if (fkIndex !== -1 && fkIndex + 1 < parts.length) {
+              isFK = true
+              const targetParts = parts[fkIndex + 1].split('.')
+              if (targetParts.length === 2) {
+                targetTable = targetParts[0]
+                targetCol = targetParts[1]
+              }
+            }
+
+            const colId = `c_${tableId}_${colName}_${colIndex}`
+
+            if (isFK && targetTable && targetCol) {
+              tempFKsToResolve.push({
+                tableId,
+                colId,
+                targetTableName: targetTable,
+                targetColName: targetCol
+              })
+            }
+
+            return {
+              id: colId,
+              name: colName,
+              type: colType,
+              isPrimaryKey: isPK,
+              isForeignKey: isFK
+            }
+          }).filter(c => c !== null) as Column[]
+
+          parsedTables.push({
+            id: tableId,
+            name: tableName,
+            comment: `Stores custom ${tableName.toLowerCase()} entity records.`,
+            x: 100 + (index % 3) * 260,
+            y: 120 + Math.floor(index / 3) * 220,
+            columns
+          })
+        })
+
+        // Resolve Foreign Key references
+        tempFKsToResolve.forEach(fk => {
+          const sourceTable = parsedTables.find(t => t.id === fk.tableId)
+          if (!sourceTable) return
+
+          const targetTable = parsedTables.find(t => t.name.toLowerCase() === fk.targetTableName.toLowerCase())
+          if (!targetTable) return
+
+          const targetCol = targetTable.columns.find(c => c.name.toLowerCase() === fk.targetColName.toLowerCase())
+          if (!targetCol) return
+
+          const sourceCol = sourceTable.columns.find(c => c.id === fk.colId)
+          if (sourceCol) {
+            sourceCol.foreignKeyTargetTableId = targetTable.id
+            sourceCol.foreignKeyTargetColumnId = targetCol.id
+          }
+        })
+
+        if (parsedTables.length > 0) {
+          // Update visual tables state
+          setTables(parsedTables)
+          setShowToast(true)
+        }
+      } catch (err: any) {
+        setImportError(err.message || 'Error al procesar el código')
+      }
+    }
+
+    parse()
+  }, [importCode])
 
   // Delete Table
   const handleDeleteTable = (tableId: string) => {
@@ -419,6 +584,21 @@ export default function App() {
           <button className="icon-btn" title="Project Settings" onClick={() => showNotification('Settings menu')}>
             <Settings size={16} />
           </button>
+          <button 
+            className="btn-secondary" 
+            style={{ 
+              backgroundColor: isSplitView ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
+              borderColor: isSplitView ? 'var(--accent-blue)' : 'var(--border-color)',
+              color: isSplitView ? 'var(--accent-blue)' : 'var(--text-primary)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+            onClick={() => setIsSplitView(!isSplitView)}
+          >
+            <Code size={14} />
+            Split View
+          </button>
           <button className="btn-secondary" onClick={() => showNotification('Project saved successfully!')}>
             Save
           </button>
@@ -452,6 +632,23 @@ export default function App() {
             <button className="btn-new-table" onClick={handleAddTable}>
               <Plus size={14} />
               NEW TABLE
+            </button>
+
+            <button
+              className="btn-new-table"
+              style={{
+                backgroundColor: 'rgba(56, 189, 248, 0.08)',
+                borderColor: 'var(--accent-blue)',
+                color: 'var(--accent-blue)',
+                marginTop: '4px'
+              }}
+              onClick={() => {
+                setImportError(null);
+                setIsSplitView(!isSplitView);
+              }}
+            >
+              <Code size={14} />
+              {isSplitView ? 'CLOSE CODE EDITOR' : 'OPEN CODE EDITOR'}
             </button>
 
             <div className="sidebar-menu">
@@ -497,6 +694,100 @@ export default function App() {
             </div>
           </div>
         </aside>
+
+        {isSplitView && (
+          <aside className="split-editor-panel">
+            <div className="macos-header">
+              <div className="macos-left">
+                <div className="macos-dots">
+                  <span className="macos-dot red" />
+                  <span className="macos-dot yellow" />
+                  <span className="macos-dot green" />
+                </div>
+                <span className="macos-title">
+                  {editorTab === 'shorthand' ? 'DataDraft DSL' : 'PostgreSQL Dialect'}
+                </span>
+              </div>
+              <div className="macos-actions">
+                <button 
+                  className="btn-macos-action" 
+                  onClick={() => {
+                    const textToCopy = editorTab === 'shorthand' ? importCode : generateFullSQL();
+                    copyToClipboard(textToCopy);
+                  }}
+                  title="Copy to Clipboard"
+                >
+                  <Copy size={12} />
+                  Copy to Clipboard
+                </button>
+                <button 
+                  className="btn-macos-action primary"
+                  onClick={handleExportScript}
+                  title="Download .sql"
+                >
+                  <Download size={12} />
+                  Download .sql
+                </button>
+              </div>
+            </div>
+
+            <div className="editor-tabs-bar">
+              <button 
+                className={`editor-tab-button ${editorTab === 'shorthand' ? 'active' : ''}`}
+                onClick={() => setEditorTab('shorthand')}
+              >
+                Código Simple (DSL)
+              </button>
+              <button 
+                className={`editor-tab-button ${editorTab === 'sql' ? 'active' : ''}`}
+                onClick={() => setEditorTab('sql')}
+              >
+                PostgreSQL Script
+              </button>
+            </div>
+
+            <div className="split-textarea-wrapper">
+              {editorTab === 'shorthand' ? (
+                <div className="code-editor-container">
+                  <textarea
+                    className="code-editor-textarea"
+                    value={importCode}
+                    onChange={(e) => setImportCode(e.target.value)}
+                    placeholder="# Escribe tus tablas aquí..."
+                    spellCheck="false"
+                  />
+                  <pre 
+                    className="code-editor-highlight"
+                    dangerouslySetInnerHTML={{ __html: highlightShorthand(importCode) }}
+                  />
+                </div>
+              ) : (
+                <pre className="split-code-readonly">
+                  {generateFullSQL()}
+                </pre>
+              )}
+
+              {/* Toast Bar at the bottom of the editor */}
+              {showToast && (
+                <div className="toast-bar-bottom">
+                  <div className="toast-text">
+                    <Check size={12} style={{ color: '#10b981' }} />
+                    {importError ? 'Error en código' : 'Script generado exitosamente'}
+                  </div>
+                  <button className="toast-dismiss" onClick={() => setShowToast(false)}>
+                    Dismiss
+                  </button>
+                </div>
+              )}
+            </div>
+            
+            {importError && (
+              <div className="modal-error" style={{ margin: '8px', borderRadius: '4px' }}>
+                ⚠️ {importError}
+              </div>
+            )}
+          </aside>
+        )}
 
         {/* Editor Canvas */}
         <main
