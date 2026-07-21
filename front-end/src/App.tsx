@@ -18,7 +18,9 @@ import {
   Minimize2,
   Grid,
   Trash2,
-  HelpCircle
+  HelpCircle,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react'
 import './App.css'
 
@@ -131,9 +133,17 @@ export default function App() {
   const [editorTab, setEditorTab] = useState<'shorthand' | 'sql'>('shorthand')
   const [showToast, setShowToast] = useState<boolean>(true)
   const [importCode, setImportCode] = useState<string>(
-    '# Escribe tus tablas aquí en código simple:\n\nusers {\n  id UUID pk\n  email String\n  created_at Timestamp\n}\n\norders {\n  id UUID pk\n  user_id UUID fk users.id\n  total Decimal\n}'
+    'users {\n  id UUID pk\n  email String\n  created_at Timestamp\n}\n\norders {\n  id UUID pk\n  user_id UUID fk users.id\n  total Decimal\n}'
   )
   const [importError, setImportError] = useState<string | null>(null)
+
+  // Indices & Queries custom state
+  const [customIndices, setCustomIndices] = useState<Array<{ id: string; name: string; tableName: string; columnName: string }>>([
+    { id: 'idx_users_email', name: 'idx_users_email', tableName: 'users', columnName: 'email' }
+  ])
+
+
+  const [isPropertiesCollapsed, setIsPropertiesCollapsed] = useState<boolean>(false)
 
   // Dragging table node state
   const [draggingTableId, setDraggingTableId] = useState<string | null>(null)
@@ -233,7 +243,7 @@ export default function App() {
         setImportError(null)
         const parsedTables: Table[] = []
 
-        // Match table definitions block: TableName { ... }
+        // Match table blocks: tableName { ... }
         const blocks = importCode.match(/([a-zA-Z0-9_]+)\s*\{([^}]+)\}/g)
         if (!blocks) return
 
@@ -296,12 +306,15 @@ export default function App() {
             }
           }).filter(c => c !== null) as Column[]
 
+          // Find existing position to preserve coordinates
+          const existingTable = tables.find(t => t.id === tableId)
+
           parsedTables.push({
             id: tableId,
             name: tableName,
-            comment: `Stores custom ${tableName.toLowerCase()} entity records.`,
-            x: 100 + (index % 3) * 260,
-            y: 120 + Math.floor(index / 3) * 220,
+            comment: existingTable?.comment || `Stores custom ${tableName.toLowerCase()} entity records.`,
+            x: existingTable?.x ?? (20 + index * 250),
+            y: existingTable?.y ?? 40,
             columns
           })
         })
@@ -325,7 +338,6 @@ export default function App() {
         })
 
         if (parsedTables.length > 0) {
-          // Update visual tables state
           setTables(parsedTables)
           setShowToast(true)
         }
@@ -673,14 +685,76 @@ export default function App() {
                 <Key size={14} />
                 INDICES
               </div>
-              <div
-                className={`menu-item ${activeMenuTab === 'QUERIES' ? 'active' : ''}`}
-                onClick={() => setActiveMenuTab('QUERIES')}
-              >
-                <Code size={14} />
-                QUERIES
               </div>
-            </div>
+
+            {/* Sidebar Tab Dynamic Lists */}
+            {activeMenuTab === 'TABLES' && (
+              <div className="sidebar-content-area">
+                <span className="sidebar-list-title">Tablas ({filteredTables.length})</span>
+                {filteredTables.map(t => (
+                  <div 
+                    key={t.id} 
+                    className={`sidebar-list-item ${selectedTableId === t.id ? 'selected' : ''}`}
+                    onClick={() => setSelectedTableId(t.id)}
+                  >
+                    <span className="sidebar-item-name">
+                      <Database size={12} style={{ color: 'var(--accent-blue)' }} />
+                      {t.name}
+                    </span>
+                    <span className="sidebar-item-meta">{t.columns.length} columnas</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {activeMenuTab === 'RELATIONS' && (
+              <div className="sidebar-content-area">
+                <span className="sidebar-list-title">Relaciones ({relationLines.length})</span>
+                {relationLines.map((line) => (
+                  <div key={line.id} className="sidebar-list-item" onClick={() => setSelectedTableId(line.targetTableId)}>
+                    <span className="sidebar-item-name" style={{ fontSize: '10px' }}>
+                      <Link2 size={12} style={{ color: 'var(--accent-green)' }} />
+                      {line.id.replace('_to_', ' ➜ ').replace(/_[a-zA-Z0-9]+_/g, '.')}
+                    </span>
+                  </div>
+                ))}
+                {relationLines.length === 0 && (
+                  <p style={{ fontSize: '11px', color: 'var(--text-muted)', padding: '0 4px' }}>No hay relaciones creadas.</p>
+                )}
+              </div>
+            )}
+
+            {activeMenuTab === 'INDICES' && (
+              <div className="sidebar-content-area">
+                <span className="sidebar-list-title">Índices ({customIndices.length})</span>
+                {customIndices.map(idx => (
+                  <div key={idx.id} className="sidebar-list-item">
+                    <span className="sidebar-item-name">
+                      <Key size={12} style={{ color: 'var(--accent-purple)' }} />
+                      {idx.name}
+                    </span>
+                    <span className="sidebar-item-meta">{idx.tableName}.{idx.columnName}</span>
+                  </div>
+                ))}
+                <button 
+                  className="btn-new-table" 
+                  style={{ marginTop: '8px', fontSize: '11px' }}
+                  onClick={() => {
+                    const name = `idx_${selectedTable?.name.toLowerCase() || 'table'}_created_at`;
+                    setCustomIndices(prev => [...prev, {
+                      id: `idx_${Date.now()}`,
+                      name,
+                      tableName: selectedTable?.name.toLowerCase() || 'users',
+                      columnName: 'created_at'
+                    }]);
+                    showNotification(`Índice ${name} creado!`);
+                  }}
+                >
+                  <Plus size={11} />
+                  CREAR ÍNDICE
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="sidebar-bottom">
@@ -710,7 +784,7 @@ export default function App() {
               </div>
               <div className="macos-actions">
                 <button 
-                  className="btn-macos-action" 
+                  className="btn-macos-action"
                   onClick={() => {
                     const textToCopy = editorTab === 'shorthand' ? importCode : generateFullSQL();
                     copyToClipboard(textToCopy);
@@ -718,7 +792,7 @@ export default function App() {
                   title="Copy to Clipboard"
                 >
                   <Copy size={12} />
-                  Copy to Clipboard
+                  Copy
                 </button>
                 <button 
                   className="btn-macos-action primary"
@@ -726,7 +800,7 @@ export default function App() {
                   title="Download .sql"
                 >
                   <Download size={12} />
-                  Download .sql
+                  SQL
                 </button>
               </div>
             </div>
@@ -900,7 +974,14 @@ export default function App() {
         </main>
 
         {/* Right side Properties Panel */}
-        <aside className="right-panel">
+        <aside className={`right-panel ${isPropertiesCollapsed ? 'collapsed' : ''}`}>
+          <div 
+            className="properties-toggle-btn"
+            onClick={() => setIsPropertiesCollapsed(!isPropertiesCollapsed)}
+            title={isPropertiesCollapsed ? 'Expandir Propiedades' : 'Colapsar Propiedades'}
+          >
+            {isPropertiesCollapsed ? <ChevronLeft size={12} /> : <ChevronRight size={12} />}
+          </div>
           {selectedTable ? (
             <>
               <div className="panel-header">
