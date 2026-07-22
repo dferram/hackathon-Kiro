@@ -162,11 +162,20 @@ export default function DatabaseDesigner({
 
   // Split View Editor state
   const [isSplitView, setIsSplitView] = useState<boolean>(true)
+  const [splitViewMode, setSplitViewMode] = useState<'dsl' | 'export'>('export')
   const [showToast, setShowToast] = useState<boolean>(true)
   const [importError, setImportError] = useState<string | null>(null)
   const [importCode, setImportCode] = useState<string>(
     'users {\n  id UUID pk\n  email String\n  created_at Timestamp\n}\n\norders {\n  id UUID pk\n  user_id UUID fk users.id\n  total Decimal\n}'
   )
+
+  // Export / Script Generator state
+  const [targetDb, setTargetDb] = useState<string>('PostgreSQL')
+  const [schemaName, setSchemaName] = useState<string>('public')
+  const [includeDrop, setIncludeDrop] = useState<boolean>(true)
+  const [generateFK, setGenerateFK] = useState<boolean>(true)
+  const [includeSeed, setIncludeSeed] = useState<boolean>(false)
+  const [exportNotification, setExportNotification] = useState<string | null>(null)
 
   // Indices & Queries custom state
   const [customIndices, setCustomIndices] = useState<Array<{ id: string; name: string; tableName: string; columnName: string }>>([
@@ -580,6 +589,121 @@ export default function DatabaseDesigner({
     return tables.map(table => generateSQL(table)).join('\n\n')
   }
 
+  // Generate export SQL with full settings (target DB, schema, DROP, FK, indices, seed)
+  const generateExportSQL = () => {
+    const now = new Date().toISOString().replace('T', ' ').slice(0, 19)
+    const lines: string[] = []
+
+    lines.push(`-- DataDraft: ${targetDb} Export`)
+    lines.push(`-- Generated on: ${now}`)
+    lines.push('')
+
+    if (targetDb === 'PostgreSQL') {
+      lines.push('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";')
+      lines.push('')
+    }
+
+    if (targetDb === 'MySQL') {
+      lines.push(`CREATE DATABASE IF NOT EXISTS \`${schemaName}\`;`)
+      lines.push(`USE \`${schemaName}\`;`)
+      lines.push('')
+    }
+
+    tables.forEach(table => {
+      const q = targetDb === 'MySQL' ? '`' : '"'
+
+      if (includeDrop) {
+        lines.push(`DROP TABLE IF EXISTS ${q}${table.name.toLowerCase()}${q} CASCADE;`)
+      }
+
+      lines.push(`-- Table: ${table.name.toLowerCase()}`)
+      lines.push(`CREATE TABLE ${q}${table.name.toLowerCase()}${q} (`)
+
+      const colDefs: string[] = []
+      table.columns.forEach(col => {
+        let typeStr = col.type
+        if (targetDb === 'PostgreSQL') {
+          if (col.type === 'UUID' && col.isPrimaryKey) typeStr = 'UUID PRIMARY KEY DEFAULT uuid_generate_v4()'
+          else if (col.type === 'UUID') typeStr = 'UUID'
+          else if (col.type === 'String') typeStr = 'VARCHAR(255) UNIQUE NOT NULL'
+          else if (col.type === 'Text') typeStr = 'TEXT'
+          else if (col.type === 'Decimal') typeStr = 'DECIMAL(12,2)'
+          else if (col.type === 'Integer') typeStr = 'INTEGER'
+          else if (col.type === 'Boolean') typeStr = 'BOOLEAN DEFAULT FALSE'
+          else if (col.type === 'Timestamp') typeStr = 'TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP'
+          else if (col.type === 'DateTime') typeStr = 'TIMESTAMP DEFAULT NOW()'
+        } else if (targetDb === 'MySQL') {
+          if (col.type === 'UUID' && col.isPrimaryKey) typeStr = 'CHAR(36) PRIMARY KEY'
+          else if (col.type === 'UUID') typeStr = 'CHAR(36)'
+          else if (col.type === 'String') typeStr = 'VARCHAR(255) NOT NULL'
+          else if (col.type === 'Text') typeStr = 'TEXT'
+          else if (col.type === 'Decimal') typeStr = 'DECIMAL(12,2)'
+          else if (col.type === 'Integer') typeStr = 'INT'
+          else if (col.type === 'Boolean') typeStr = 'TINYINT(1) DEFAULT 0'
+          else if (col.type === 'Timestamp') typeStr = 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP'
+          else if (col.type === 'DateTime') typeStr = 'DATETIME DEFAULT NOW()'
+        } else if (targetDb === 'SQLite') {
+          if (col.type === 'UUID' && col.isPrimaryKey) typeStr = 'TEXT PRIMARY KEY'
+          else if (col.type === 'UUID') typeStr = 'TEXT'
+          else if (col.type === 'String') typeStr = 'TEXT NOT NULL'
+          else if (col.type === 'Text') typeStr = 'TEXT'
+          else if (col.type === 'Decimal') typeStr = 'REAL'
+          else if (col.type === 'Integer') typeStr = 'INTEGER'
+          else if (col.type === 'Boolean') typeStr = 'INTEGER DEFAULT 0'
+          else if (col.type === 'Timestamp' || col.type === 'DateTime') typeStr = 'TEXT DEFAULT CURRENT_TIMESTAMP'
+        } else {
+          if (col.type === 'String') typeStr = 'VARCHAR(255)'
+          else if (col.type === 'Timestamp') typeStr = 'TIMESTAMP WITH TIME ZONE'
+          else if (col.type === 'Decimal') typeStr = 'DECIMAL(10,2)'
+          else if (col.type === 'DateTime') typeStr = 'TIMESTAMP'
+          if (col.isPrimaryKey) typeStr += ' PRIMARY KEY'
+        }
+
+        let line = `    ${q}${col.name}${q} ${typeStr}`
+
+        if (generateFK && col.isForeignKey && col.foreignKeyTargetTableId) {
+          const targetTable = tables.find(t => t.id === col.foreignKeyTargetTableId)
+          const targetCol = targetTable?.columns.find(c => c.id === col.foreignKeyTargetColumnId)
+          if (targetTable && targetCol) {
+            line += ` REFERENCES ${q}${targetTable.name.toLowerCase()}${q}(${q}${targetCol.name}${q}) ON DELETE CASCADE`
+          }
+        }
+
+        colDefs.push(line)
+      })
+
+      // Add CHECK constraints for status-like columns
+      table.columns.forEach(col => {
+        if (col.name === 'status' && col.type === 'String') {
+          colDefs.push(`    ${q}${col.name}${q} VARCHAR(50) CHECK (status IN ('pending', 'shipped', 'delivered'))`)
+        }
+      })
+
+      lines.push(colDefs.join(',\n'))
+
+      if (targetDb === 'MongoDB' || targetDb === 'Prisma ORM') {
+        lines.push(`);  "metadata" JSONB`)
+      } else {
+        lines.push(');')
+      }
+      lines.push('')
+    })
+
+    // Indices
+    if (customIndices.length > 0) {
+      lines.push('-- Indices for faster querying')
+      customIndices.forEach(idx => {
+        const q = targetDb === 'MySQL' ? '`' : '"'
+        lines.push(`CREATE INDEX ${q}${idx.name}${q} ON ${q}${idx.tableName}${q}(${q}${idx.columnName}${q});`)
+      })
+      lines.push('')
+    }
+
+    lines.push('COMMIT;')
+
+    return lines.join('\n')
+  }
+
   // Copy SQL script to clipboard
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
@@ -590,15 +714,22 @@ export default function DatabaseDesigner({
 
   // Export SQL file
   const handleExportScript = () => {
-    const fullSql = generateFullSQL()
+    setIsSplitView(true)
+    setSplitViewMode('export')
+  }
+
+  // Download SQL file
+  const handleDownloadSQL = () => {
+    const fullSql = generateExportSQL()
     const blob = new Blob([fullSql], { type: 'text/plain;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = 'schema.sql'
+    link.download = `${schemaName}_schema.sql`
     link.click()
     URL.revokeObjectURL(url)
-    showNotification('Downloaded schema.sql')
+    setExportNotification('Script generated successfully')
+    setTimeout(() => setExportNotification(null), 3000)
   }
 
   // Relations calculation helper to render visual lines
@@ -734,7 +865,12 @@ export default function DatabaseDesigner({
                   marginTop: '4px'
                 }}
                 onClick={() => {
-                  setIsSplitView(!isSplitView)
+                  if (isSplitView && splitViewMode === 'dsl') {
+                    setIsSplitView(false)
+                  } else {
+                    setIsSplitView(true)
+                    setSplitViewMode('dsl')
+                  }
                 }}
               >
                 <Code size={14} />
@@ -1043,14 +1179,21 @@ export default function DatabaseDesigner({
                   <button 
                     className="btn-secondary" 
                     style={{ 
-                      backgroundColor: isSplitView ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
-                      borderColor: isSplitView ? 'var(--accent-blue)' : 'var(--border-color)',
-                      color: isSplitView ? 'var(--accent-blue)' : 'var(--text-primary)',
+                      backgroundColor: (isSplitView && splitViewMode === 'export') ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
+                      borderColor: (isSplitView && splitViewMode === 'export') ? 'var(--accent-blue)' : 'var(--border-color)',
+                      color: (isSplitView && splitViewMode === 'export') ? 'var(--accent-blue)' : 'var(--text-primary)',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '6px'
                     }}
-                    onClick={() => setIsSplitView(!isSplitView)}
+                    onClick={() => {
+                      if (isSplitView && splitViewMode === 'export') {
+                        setIsSplitView(false)
+                      } else {
+                        setIsSplitView(true)
+                        setSplitViewMode('export')
+                      }
+                    }}
                   >
                     <Code size={13} />
                     Split View
@@ -1058,9 +1201,23 @@ export default function DatabaseDesigner({
                   <button className="btn-secondary" onClick={() => showNotification('Project saved successfully!')}>
                     Save
                   </button>
-                  <button className="btn-primary" onClick={handleExportScript}>
+                  <button 
+                    className="btn-primary" 
+                    style={{
+                      backgroundColor: (isSplitView && splitViewMode === 'export') ? 'rgba(16, 185, 129, 0.2)' : undefined,
+                      borderColor: (isSplitView && splitViewMode === 'export') ? '#10b981' : undefined,
+                    }}
+                    onClick={() => {
+                      if (isSplitView && splitViewMode === 'export') {
+                        setIsSplitView(false)
+                      } else {
+                        setIsSplitView(true)
+                        setSplitViewMode('export')
+                      }
+                    }}
+                  >
                     <Download size={14} />
-                    Export Script
+                    Export
                   </button>
                 </div>
               </div>
@@ -1068,7 +1225,7 @@ export default function DatabaseDesigner({
               {/* Workspace Area */}
               <div className="workspace-body" style={{ height: 'calc(100% - 48px)' }}>
 
-                {isSplitView && (
+                {isSplitView && splitViewMode === 'dsl' && (
                   <aside className="split-editor-panel">
                     <div className="macos-header">
                       <div className="macos-left">
@@ -1115,13 +1272,291 @@ export default function DatabaseDesigner({
                   </aside>
                 )}
 
-                <main 
-                  className="canvas-grid"
-                  ref={canvasRef}
-                  onMouseDown={handleCanvasMouseDown}
-                  onMouseMove={handleCanvasMouseMove}
-                  onMouseUp={handleCanvasMouseUp}
-                >
+                {isSplitView && splitViewMode === 'export' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                    {/* Export Header */}
+                    <div className="macos-header" style={{ userSelect: 'none' }}>
+                      <div className="macos-left" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <div 
+                          onClick={() => setIsSplitView(false)}
+                          style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#ef4444', cursor: 'pointer', transition: 'opacity 0.2s', position: 'relative' }}
+                          title="Cerrar y volver al canvas"
+                          className="macos-dot-close"
+                        />
+                        <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#f59e0b', opacity: 0.8 }} />
+                        <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#10b981', opacity: 0.8 }} />
+                        <span className="macos-title" style={{ marginLeft: '12px' }}>Script Generator</span>
+                      </div>
+                      <div className="macos-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <button className="macos-action-btn active" style={{ cursor: 'default' }}>Export</button>
+                        <button className="macos-action-btn" onClick={() => { setSplitViewMode('dsl') }}>DSL</button>
+                        <button 
+                          className="macos-action-btn" 
+                          onClick={() => setIsSplitView(false)}
+                          style={{
+                            background: 'rgba(239, 68, 68, 0.1)',
+                            border: '1px solid rgba(239, 68, 68, 0.2)',
+                            color: '#ef4444',
+                            borderRadius: '4px',
+                            padding: '3px 8px',
+                            fontSize: '11px',
+                            marginLeft: '8px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Volver al Canvas
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Export Body */}
+                    <div style={{ display: 'flex', flexDirection: 'row', flex: 1, overflow: 'hidden' }}>
+                      {/* Left: Target DB & Settings */}
+                      <div style={{ width: '220px', borderRight: '1px solid #1e293b', display: 'flex', flexDirection: 'column', padding: '16px 12px', gap: '16px', overflowY: 'auto', background: '#0a0f18' }}>
+                        <div>
+                          <span style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px', display: 'block' }}>Target Database</span>
+                          {['PostgreSQL', 'MySQL', 'SQLite', 'MongoDB', 'Prisma ORM'].map(db => (
+                            <div
+                              key={db}
+                              onClick={() => setTargetDb(db)}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                padding: '8px 10px',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                marginBottom: '2px',
+                                fontSize: '12px',
+                                fontWeight: targetDb === db ? 600 : 400,
+                                color: targetDb === db ? '#38bdf8' : '#94a3b8',
+                                background: targetDb === db ? 'rgba(56, 189, 248, 0.08)' : 'transparent',
+                                border: targetDb === db ? '1px solid rgba(56, 189, 248, 0.2)' : '1px solid transparent',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              <Database size={13} />
+                              {db}
+                              {targetDb === db && db === 'PostgreSQL' && (
+                                <span style={{ marginLeft: 'auto', fontSize: '9px', padding: '1px 5px', borderRadius: '3px', background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8' }}>v15</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+
+                        <div style={{ borderTop: '1px solid #131924', paddingTop: '16px' }}>
+                          <span style={{ fontSize: '13px', fontWeight: 600, color: '#e2e8f0', marginBottom: '12px', display: 'block' }}>Export Settings</span>
+
+                          <div style={{ marginBottom: '12px' }}>
+                            <label style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 500, marginBottom: '4px', display: 'block', textTransform: 'uppercase' }}>Schema Name</label>
+                            <input
+                              type="text"
+                              value={schemaName}
+                              onChange={(e) => setSchemaName(e.target.value)}
+                              style={{
+                                width: '100%',
+                                padding: '6px 10px',
+                                background: '#0d1117',
+                                border: '1px solid #1e293b',
+                                borderRadius: '4px',
+                                color: '#e2e8f0',
+                                fontSize: '12px',
+                                outline: 'none',
+                                boxSizing: 'border-box'
+                              }}
+                            />
+                          </div>
+
+                          {[
+                            { label: 'Include DROP statements', checked: includeDrop, onChange: setIncludeDrop },
+                            { label: 'Generate relationships (FK)', checked: generateFK, onChange: setGenerateFK },
+                            { label: 'Include seed data', checked: includeSeed, onChange: setIncludeSeed },
+                          ].map((setting) => (
+                            <label
+                              key={setting.label}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                padding: '6px 0',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                color: '#cbd5e1'
+                              }}
+                            >
+                              <div
+                                onClick={() => setting.onChange(!setting.checked)}
+                                style={{
+                                  width: '16px',
+                                  height: '16px',
+                                  borderRadius: '4px',
+                                  border: setting.checked ? '2px solid #38bdf8' : '2px solid #475569',
+                                  background: setting.checked ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  transition: 'all 0.15s ease',
+                                  flexShrink: 0
+                                }}
+                              >
+                                {setting.checked && <Check size={10} style={{ color: '#38bdf8' }} />}
+                              </div>
+                              {setting.label}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Right: SQL Preview */}
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                        {/* Preview Header */}
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '8px 12px',
+                          borderBottom: '1px solid #1e293b',
+                          background: '#0d1117'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#ef4444' }}></span>
+                            <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#f59e0b' }}></span>
+                            <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#10b981' }}></span>
+                            <span style={{ fontSize: '11px', color: '#64748b', marginLeft: '8px' }}>{targetDb} Dialect</span>
+                          </div>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button
+                              onClick={() => copyToClipboard(generateExportSQL())}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                padding: '4px 10px',
+                                background: 'rgba(148, 163, 184, 0.08)',
+                                border: '1px solid #334155',
+                                borderRadius: '4px',
+                                color: '#94a3b8',
+                                fontSize: '11px',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              {copied ? <Check size={11} style={{ color: '#10b981' }} /> : <Copy size={11} />}
+                              Copy to Clipboard
+                            </button>
+                            <button
+                              onClick={handleDownloadSQL}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                padding: '4px 10px',
+                                background: 'rgba(56, 189, 248, 0.12)',
+                                border: '1px solid rgba(56, 189, 248, 0.3)',
+                                borderRadius: '4px',
+                                color: '#38bdf8',
+                                fontSize: '11px',
+                                cursor: 'pointer',
+                                fontWeight: 600,
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              <Download size={11} />
+                              Download .sql
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* SQL Code Preview */}
+                        <div style={{ flex: 1, overflowY: 'auto', padding: '16px', background: '#080c14', fontFamily: '"JetBrains Mono", "Fira Code", monospace' }}>
+                          <pre style={{ margin: 0, fontSize: '12px', lineHeight: '1.7', color: '#e2e8f0', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                            {generateExportSQL().split('\n').map((line, i) => {
+                              let highlighted = line
+
+                              if (line.trim().startsWith('--')) {
+                                return <span key={i} style={{ color: '#475569' }}>{line}{'\n'}</span>
+                              }
+
+                              const keywords = ['CREATE', 'TABLE', 'DROP', 'IF', 'NOT', 'EXISTS', 'CASCADE', 'PRIMARY', 'KEY', 'DEFAULT', 'REFERENCES', 'ON', 'DELETE', 'CHECK', 'IN', 'INDEX', 'COMMIT', 'EXTENSION', 'DATABASE', 'USE', 'UNIQUE', 'NULL', 'BEGIN', 'FOREIGN']
+                              const parts: React.ReactNode[] = []
+                              const tokens = highlighted.split(/([\s,();]+)/)
+                              tokens.forEach((token, ti) => {
+                                const upperToken = token.toUpperCase()
+                                if (keywords.includes(upperToken)) {
+                                  parts.push(<span key={`${i}-${ti}`} style={{ color: '#f472b6', fontWeight: 600 }}>{token}</span>)
+                                } else if (/^['"].*['"]$/.test(token) || /^'.*'$/.test(token)) {
+                                  parts.push(<span key={`${i}-${ti}`} style={{ color: '#34d399' }}>{token}</span>)
+                                } else if (/^(uuid_generate_v4|NOW|CURRENT_TIMESTAMP|JSONB|TINYINT|BOOLEAN|VARCHAR|INTEGER|INT|DECIMAL|REAL|TEXT|UUID|CHAR|TIMESTAMP|DATETIME)/.test(upperToken)) {
+                                  parts.push(<span key={`${i}-${ti}`} style={{ color: '#38bdf8' }}>{token}</span>)
+                                } else if (/^".*"$/.test(token) || /^`.*`$/.test(token)) {
+                                  parts.push(<span key={`${i}-${ti}`} style={{ color: '#fbbf24' }}>{token}</span>)
+                                } else {
+                                  parts.push(<span key={`${i}-${ti}`}>{token}</span>)
+                                }
+                              })
+                              return <span key={i}>{parts}{'\n'}</span>
+                            })}
+                          </pre>
+                        </div>
+
+                        {/* Bottom Info Bar */}
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '8px 12px',
+                          borderTop: '1px solid #1e293b',
+                          background: '#0d1117'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }}></span>
+                            <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 500 }}>Optimized for {targetDb}</span>
+                          </div>
+                          <span style={{ fontSize: '10px', color: '#475569' }}>
+                            {targetDb === 'PostgreSQL' && 'Using native UUID and JSONB types for compatibility with PostgreSQL 15+.'}
+                            {targetDb === 'MySQL' && 'Using CHAR(36) for UUID and TINYINT for Boolean for MySQL 8+ compatibility.'}
+                            {targetDb === 'SQLite' && 'Using TEXT-based types for maximum SQLite compatibility.'}
+                            {targetDb === 'MongoDB' && 'Schema definition for MongoDB document validation.'}
+                            {targetDb === 'Prisma ORM' && 'Prisma-compatible schema structure.'}
+                          </span>
+                        </div>
+
+                        {/* Export Notification */}
+                        {exportNotification && (
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '10px 16px',
+                            background: 'rgba(16, 185, 129, 0.08)',
+                            borderTop: '1px solid rgba(16, 185, 129, 0.2)'
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <Check size={14} style={{ color: '#10b981' }} />
+                              <span style={{ fontSize: '12px', color: '#10b981', fontWeight: 500 }}>{exportNotification}</span>
+                            </div>
+                            <button
+                              onClick={() => setExportNotification(null)}
+                              style={{ background: 'none', border: 'none', color: '#38bdf8', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}
+                            >
+                              Dismiss
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {!(isSplitView && splitViewMode === 'export') && (
+                  <>
+                    <main 
+                      className="canvas-grid"
+                      ref={canvasRef}
+                      onMouseDown={handleCanvasMouseDown}
+                      onMouseMove={handleCanvasMouseMove}
+                      onMouseUp={handleCanvasMouseUp}
+                    >
                   <div 
                     className="canvas-content"
                     style={{
@@ -1504,6 +1939,8 @@ export default function DatabaseDesigner({
                     </div>
                   )}
                 </aside>
+                  </>
+                )}
               </div>
 
             </div>
