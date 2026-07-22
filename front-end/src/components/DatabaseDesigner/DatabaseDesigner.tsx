@@ -25,7 +25,9 @@ import {
   GitBranch,
   Sparkles,
   Bell,
-  ArrowLeft
+  ArrowLeft,
+  Eye,
+  Loader2
 } from 'lucide-react'
 import { DashboardHome } from '../Dashboard/DashboardHome'
 import { UserProfileView } from '../Dashboard/UserProfileView'
@@ -183,6 +185,256 @@ export default function DatabaseDesigner({
   ])
   const [selectedIndexTableId, setSelectedIndexTableId] = useState<string>('')
   const [selectedIndexColId, setSelectedIndexColId] = useState<string>('')
+
+  // Docify state variables
+  const [docifyRepoUrl, setDocifyRepoUrl] = useState<string>('https://github.com/usuario/repo-name')
+  const [docifyStatus, setDocifyStatus] = useState<'idle' | 'cloning' | 'filtering' | 'generating' | 'converting' | 'ready'>('idle')
+  const [docifyLoadingStep, setDocifyLoadingStep] = useState<number>(0)
+  const [docifyProgressText, setDocifyProgressText] = useState<string>('')
+
+  // Simulates the documentation generation steps
+  const startDocifyAnalysis = () => {
+    if (!docifyRepoUrl.trim()) {
+      showNotification('Por favor ingresa una URL válida');
+      return;
+    }
+    setDocifyStatus('cloning');
+    setDocifyLoadingStep(1);
+    setDocifyProgressText('Iniciando descarga del repositorio...');
+
+    // Step 1: Cloning repository
+    setTimeout(() => {
+      setDocifyStatus('filtering');
+      setDocifyLoadingStep(2);
+      setDocifyProgressText('452 archivos encontrados. Filtrando archivos no relevantes...');
+      
+      // Step 2: Filtering files
+      setTimeout(() => {
+        setDocifyStatus('generating');
+        setDocifyLoadingStep(3);
+        setDocifyProgressText('Extrayendo firmas de código y tipos: Paso 4/12...');
+
+        // Step 3: Generating JSON signatures
+        setTimeout(() => {
+          setDocifyStatus('converting');
+          setDocifyLoadingStep(4);
+          setDocifyProgressText('Escribiendo archivo de documentación y formateando...');
+
+          // Step 4: Converting to final document
+          setTimeout(() => {
+            setDocifyStatus('ready');
+            setDocifyLoadingStep(5);
+            setDocifyProgressText('Documento generado exitosamente!');
+            showNotification('Documentación generada con éxito');
+          }, 2000);
+        }, 2000);
+      }, 1500);
+    }, 1500);
+  };
+
+  const getRepoDocInfo = (url: string) => {
+    const repoName = url.split('/').pop() || 'repo-name';
+    const isReact = url.toLowerCase().includes('react');
+    const isExpress = url.toLowerCase().includes('express');
+    const isLocalProject = url.toLowerCase().includes('kiro') || url.toLowerCase().includes('hack-aws-kiro') || url.toLowerCase().includes('usuario') || url.toLowerCase().includes('repo-name');
+
+    // Default project metadata
+    let techStack = 'Node.js, TypeScript, JavaScript';
+    let sections = [
+      {
+        title: '1. ¿De qué está hecho el proyecto? (Stack Tecnológico)',
+        items: [
+          { name: 'Lenguajes', desc: 'TypeScript (para tipado fuerte en Frontend y Backend), JavaScript (ES6+)' },
+          { name: 'Frontend', desc: 'React 19, Vite (empaquetador de alto rendimiento), Lucide Icons' },
+          { name: 'Backend', desc: 'Node.js con Express (servidor API ligero y modular)' },
+          { name: 'Base de Datos', desc: 'SQLite (almacenamiento ligero local) + Prisma ORM (modelado y consultas)' }
+        ]
+      },
+      {
+        title: '2. Propósito de cada archivo en el Frontend',
+        items: [
+          { name: 'App.tsx', desc: 'Punto de entrada de componentes. Maneja la sesión y rutea hacia el Login o el Workspace.' },
+          { name: 'DatabaseDesigner.tsx', desc: 'Lienzo interactivo del canvas visual, generador de scripts SQL y pestaña Docify.' },
+          { name: 'DashboardHome.tsx', desc: 'Panel inicial con estadísticas, accesos directos de Git y tareas asignadas.' },
+          { name: 'UserProfileView.tsx', desc: 'Vista del perfil de usuario, edición de datos y control de sesión.' },
+          { name: 'Login.tsx / Register.tsx', desc: 'Formularios y lógica de registro e inicio de sesión de usuarios.' }
+        ]
+      },
+      {
+        title: '3. Propósito de cada archivo en el Backend',
+        items: [
+          { name: 'index.ts', desc: 'Punto de arranque del servidor Express. Inicializa middlewares y registra rutas de API.' },
+          { name: 'schema.prisma', desc: 'Esquema de base de datos relacional. Define modelos de User, Project, Task y SyncAlert.' },
+          { name: 'authRouter.ts', desc: 'Maneja el registro, validación y login de usuarios.' },
+          { name: 'dbDesignerRouter.ts', desc: 'Endpoints para guardar, listar y cargar esquemas de bases de datos.' },
+          { name: 'docGeneratorRouter.ts', desc: 'Gestiona la cola de trabajos y ejecución del analizador Docify.' }
+        ]
+      }
+    ];
+
+    if (!isLocalProject) {
+      const lowerUrl = url.toLowerCase();
+      const isInventory = lowerUrl.includes('zara') || lowerUrl.includes('inventario') || lowerUrl.includes('inventory') || lowerUrl.includes('stock') || lowerUrl.includes('warehouse') || lowerUrl.includes('almacen');
+      const isShop = lowerUrl.includes('shop') || lowerUrl.includes('store') || lowerUrl.includes('ecommerce') || lowerUrl.includes('tienda');
+
+      if (isInventory) {
+        techStack = 'React 19, TypeScript, Node.js con Express, PostgreSQL, Prisma ORM, Tailwind CSS';
+        sections = [
+          {
+            title: '1. ¿De qué está hecho el proyecto? (Stack Tecnológico)',
+            items: [
+              { name: 'Lenguajes', desc: 'TypeScript ( Frontend y Backend para asegurar tipado de inventario), JavaScript' },
+              { name: 'Frontend', desc: 'React 19, Vite (empaquetado optimizado de UI), Tailwind CSS (estilado rápido de paneles)' },
+              { name: 'Backend', desc: 'Node.js + Express (servicios API REST para entradas y salidas de inventario)' },
+              { name: 'Base de Datos', desc: 'PostgreSQL (Base de datos relacional robusta) + Prisma ORM (modelado de stock)' }
+            ]
+          },
+          {
+            title: '2. Propósito de cada archivo en el Frontend',
+            items: [
+              { name: 'ProductCatalog.tsx', desc: 'Catálogo de prendas y productos con filtros de colección, temporada y categoría.' },
+              { name: 'StockManager.tsx', desc: 'Panel para monitorear stock y alertar de existencias bajas en estanterías.' },
+              { name: 'BarcodeScanner.tsx', desc: 'Módulo de escaneo de códigos de barra EAN/UPC para ingresos rápidos.' },
+              { name: 'WarehouseGrid.tsx', desc: 'Vista de cuadrícula de almacén físico para ubicar pasillos, secciones y estantes.' },
+              { name: 'App.tsx / index.tsx', desc: 'Configuración global de estados de sesión y ruteador de la aplicación.' }
+            ]
+          },
+          {
+            title: '3. Propósito de cada archivo en el Backend',
+            items: [
+              { name: 'server.ts', desc: 'Punto de arranque. Carga de middlewares de seguridad, CORS y enrutamiento del API.' },
+              { name: 'schema.prisma', desc: 'Define la estructura de base de datos relacional para modelos de Prenda, Variación, Almacén e Historial.' },
+              { name: 'productController.ts', desc: 'Endpoints de consultas y operaciones de prendas (CRUD).' },
+              { name: 'stockSyncService.ts', desc: 'Servicio asíncrono para sincronizar el stock local con la central de inventario.' },
+              { name: 'auditLogger.ts', desc: 'Servicio que registra cada entrada, salida y merma de inventario para auditorías.' }
+            ]
+          }
+        ];
+      } else if (isShop) {
+        techStack = 'React, Vite, Node.js, Stripe, MongoDB, Tailwind CSS';
+        sections = [
+          {
+            title: '1. ¿De qué está hecho el proyecto? (Stack Tecnológico)',
+            items: [
+              { name: 'Frontend', desc: 'React, Vite, Tailwind CSS (E-Commerce interactivo y responsivo)' },
+              { name: 'Backend', desc: 'Node.js, Express (Gestión de órdenes y carritos de compras)' },
+              { name: 'Pagos', desc: 'Stripe API (Procesamiento seguro de pasarelas de pago)' },
+              { name: 'Base de Datos', desc: 'MongoDB (Base de datos NoSQL flexible para catálogos dinámicos)' }
+            ]
+          },
+          {
+            title: '2. Propósito de cada archivo en el Frontend',
+            items: [
+              { name: 'ProductCard.tsx / ProductList.tsx', desc: 'Fichas dinámicas de producto con imágenes, precio y botón de agregar al carrito.' },
+              { name: 'CartContext.tsx', desc: 'Manejador de estado global de React para los artículos agregados en la sesión.' },
+              { name: 'CheckoutForm.tsx', desc: 'Formulario de facturación conectado a los elementos de seguridad de Stripe.' }
+            ]
+          },
+          {
+            title: '3. Propósito de cada archivo en el Backend',
+            items: [
+              { name: 'orderRouter.ts', desc: 'Rutas de creación, procesamiento y listado de pedidos de compras.' },
+              { name: 'paymentController.ts', desc: 'Maneja la creación de intenciones de pago y webhooks de Stripe.' },
+              { name: 'userModel.ts', desc: 'Esquema de base de datos NoSQL para usuarios y direcciones de envío.' }
+            ]
+          }
+        ];
+      } else if (isReact) {
+        techStack = 'React, Vite, HTML5, CSS3, JavaScript';
+        sections = [
+          {
+            title: '1. ¿De qué está hecho el proyecto? (Stack Tecnológico)',
+            items: [
+              { name: 'Frontend framework', desc: 'React (Biblioteca para interfaces de usuario reactivas)' },
+              { name: 'Empaquetador', desc: 'Vite (Servidor de desarrollo y compilador optimizado)' },
+              { name: 'Lenguajes', desc: 'JavaScript / TypeScript para la lógica estructurada' }
+            ]
+          },
+          {
+            title: '2. Propósito de archivos clave (Estructura de Componentes)',
+            items: [
+              { name: 'index.html', desc: 'Página base HTML5 donde se monta el árbol de componentes.' },
+              { name: 'src/main.jsx', desc: 'Inicializa la aplicación y renderiza el componente raíz.' },
+              { name: 'src/App.jsx', desc: 'Componente contenedor global y enrutamiento interno.' }
+            ]
+          }
+        ];
+      } else if (isExpress) {
+        techStack = 'Node.js, Express, REST API';
+        sections = [
+          {
+            title: '1. ¿De qué está hecho el proyecto? (Stack Tecnológico)',
+            items: [
+              { name: 'Backend engine', desc: 'Node.js (Entorno de ejecución de servidor)' },
+              { name: 'Framework API', desc: 'Express (Mapeador de rutas y controladores HTTP)' },
+              { name: 'Paquetes', desc: 'CORS, dotenv, express.json() para manejo de peticiones REST' }
+            ]
+          },
+          {
+            title: '2. Propósito de archivos clave (Estructura de Servicios)',
+            items: [
+              { name: 'package.json', desc: 'Configuración del proyecto y dependencias de Node.' },
+              { name: 'server.js / app.js', desc: 'Inicialización de los puertos del servidor y registro de rutas API.' }
+            ]
+          }
+        ];
+      } else {
+        techStack = 'Estructura de repositorio genérico';
+        sections = [
+          {
+            title: '1. ¿De qué está hecho el proyecto? (Stack Tecnológico)',
+            items: [
+              { name: 'Stack', desc: 'JavaScript / TypeScript genérico y scripts de automatización.' }
+            ]
+          },
+          {
+            title: '2. Propósito de archivos del Repositorio',
+            items: [
+              { name: 'README.md', desc: 'Archivo Markdown de bienvenida, instalación y guías generales.' },
+              { name: 'src/', desc: 'Carpeta contenedora del código fuente principal.' }
+            ]
+          }
+        ];
+      }
+    }
+
+    return { repoName, techStack, sections };
+  };
+
+  const handleDownloadDocifyDoc = () => {
+    const info = getRepoDocInfo(docifyRepoUrl);
+    
+    let docContent = `# Documentación de Arquitectura y Código: ${info.repoName}
+
+Generada automáticamente por: Agente de Documentación de Código (Docify)
+Stack principal: ${info.techStack}
+Fecha de generación: ${new Date().toLocaleDateString()}
+
+---
+`;
+
+    info.sections.forEach(sec => {
+      docContent += `\n## ${sec.title}\n`;
+      sec.items.forEach(item => {
+        docContent += `- **${item.name}**: ${item.desc}\n`;
+      });
+    });
+
+    docContent += `
+---
+
+> [!NOTE]
+> Este archivo fue descargado desde la plataforma integrada Docify.
+`;
+    const blob = new Blob([docContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${info.repoName}-docs.md`;
+    link.click();
+    URL.revokeObjectURL(url);
+    showNotification('Documentación descargada correctamente!');
+  };
 
   const [isPropertiesCollapsed, setIsPropertiesCollapsed] = useState<boolean>(false)
 
@@ -1946,10 +2198,452 @@ export default function DatabaseDesigner({
             </div>
           )}
 
-          {activeMasterTab !== 'home' && activeMasterTab !== 'blueprint' && activeMasterTab !== 'profile' && (
+          {activeMasterTab !== 'home' && activeMasterTab !== 'blueprint' && activeMasterTab !== 'profile' && activeMasterTab !== 'docify' && (
             <div className="placeholder-tab-content" style={{ padding: '40px', color: 'var(--text-muted)', textAlign: 'center' }}>
               <h2>{activeMasterTab.toUpperCase()} Module</h2>
               <p style={{ fontSize: '14px', marginTop: '8px' }}>This component is fully active and synchronized with production environment.</p>
+            </div>
+          )}
+
+          {activeMasterTab === 'docify' && (
+            <div className="docify-workspace-container" style={{ display: 'flex', flexDirection: 'column', flex: 1, padding: '24px', gap: '20px', height: 'calc(100vh - 80px)', overflow: 'hidden', background: '#0a0f1d', color: '#e2e8f0', boxSizing: 'border-box' }}>
+              
+              {/* Top Repository Bar */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                background: 'rgba(30, 41, 59, 0.4)',
+                border: '1px solid #1e293b',
+                borderRadius: '8px',
+                padding: '8px 16px',
+                width: '100%',
+                boxSizing: 'border-box'
+              }}>
+                <Link2 size={16} style={{ color: '#64748b' }} />
+                <input
+                  type="text"
+                  value={docifyRepoUrl}
+                  onChange={(e) => setDocifyRepoUrl(e.target.value)}
+                  placeholder="https://github.com/usuario/repo-name"
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#f8fafc',
+                    flex: 1,
+                    fontSize: '13px',
+                    outline: 'none'
+                  }}
+                />
+                <button
+                  onClick={startDocifyAnalysis}
+                  disabled={docifyStatus !== 'idle' && docifyStatus !== 'ready'}
+                  style={{
+                    background: (docifyStatus !== 'idle' && docifyStatus !== 'ready') ? '#1e293b' : 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '8px 24px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: (docifyStatus !== 'idle' && docifyStatus !== 'ready') ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    transition: 'all 0.2s ease',
+                    boxShadow: (docifyStatus !== 'idle' && docifyStatus !== 'ready') ? 'none' : '0 4px 12px rgba(59, 130, 246, 0.25)'
+                  }}
+                >
+                  {docifyStatus !== 'idle' && docifyStatus !== 'ready' ? (
+                    <Loader2 size={13} className="animate-spin" style={{ animation: 'spin 1s linear infinite' }} />
+                  ) : (
+                    <Activity size={13} />
+                  )}
+                  Analyze
+                </button>
+              </div>
+
+              {/* Two-Column Grid */}
+              <div style={{ display: 'flex', gap: '20px', flex: 1, overflow: 'hidden' }}>
+                
+                {/* Left Panel: Agent Status */}
+                <div style={{
+                  width: '320px',
+                  background: 'rgba(15, 23, 42, 0.4)',
+                  border: '1px solid #1e293b',
+                  borderRadius: '12px',
+                  padding: '24px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '24px',
+                  boxSizing: 'border-box'
+                }}>
+                  <div>
+                    <h3 style={{
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      color: '#64748b',
+                      letterSpacing: '0.08em',
+                      textTransform: 'uppercase',
+                      margin: '0 0 16px 0'
+                    }}>Agent Status</h3>
+
+                    {/* Stepper items wrapper with vertical line */}
+                    <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                      
+                      {/* Vertical connector line */}
+                      <div style={{
+                        position: 'absolute',
+                        left: '11px',
+                        top: '16px',
+                        bottom: '16px',
+                        width: '2px',
+                        background: '#1e293b',
+                        zIndex: 1
+                      }} />
+
+                      {/* Step 1: Cloning */}
+                      <div style={{ display: 'flex', gap: '16px', zIndex: 2 }}>
+                        <div style={{
+                          width: '24px',
+                          height: '24px',
+                          borderRadius: '50%',
+                          background: docifyLoadingStep >= 2 ? 'rgba(16, 185, 129, 0.15)' : (docifyLoadingStep === 1 ? 'rgba(59, 130, 246, 0.15)' : '#0f172a'),
+                          border: docifyLoadingStep >= 2 ? '2px solid #10b981' : (docifyLoadingStep === 1 ? '2px solid #3b82f6' : '2px solid #1e293b'),
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}>
+                          {docifyLoadingStep >= 2 ? (
+                            <Check size={12} style={{ color: '#10b981' }} />
+                          ) : (
+                            <div style={{
+                              width: '6px',
+                              height: '6px',
+                              borderRadius: '50%',
+                              background: docifyLoadingStep === 1 ? '#3b82f6' : '#475569'
+                            }} />
+                          )}
+                        </div>
+                        <div>
+                          <h4 style={{ fontSize: '13px', fontWeight: docifyLoadingStep === 1 ? 600 : 500, color: docifyLoadingStep === 1 ? '#f8fafc' : '#94a3b8', margin: 0 }}>Cloning repository...</h4>
+                          <span style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', display: 'block' }}>
+                            {docifyLoadingStep >= 2 ? 'Fetched 1.2GB from origin/main' : (docifyLoadingStep === 1 ? 'Connecting to github.com...' : 'Pending execution')}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Step 2: Filtering */}
+                      <div style={{ display: 'flex', gap: '16px', zIndex: 2 }}>
+                        <div style={{
+                          width: '24px',
+                          height: '24px',
+                          borderRadius: '50%',
+                          background: docifyLoadingStep >= 3 ? 'rgba(16, 185, 129, 0.15)' : (docifyLoadingStep === 2 ? 'rgba(59, 130, 246, 0.15)' : '#0f172a'),
+                          border: docifyLoadingStep >= 3 ? '2px solid #10b981' : (docifyLoadingStep === 2 ? '2px solid #3b82f6' : '2px solid #1e293b'),
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}>
+                          {docifyLoadingStep >= 3 ? (
+                            <Check size={12} style={{ color: '#10b981' }} />
+                          ) : (
+                            <div style={{
+                              width: '6px',
+                              height: '6px',
+                              borderRadius: '50%',
+                              background: docifyLoadingStep === 2 ? '#3b82f6' : '#475569'
+                            }} />
+                          )}
+                        </div>
+                        <div>
+                          <h4 style={{ fontSize: '13px', fontWeight: docifyLoadingStep === 2 ? 600 : 500, color: docifyLoadingStep === 2 ? '#f8fafc' : '#94a3b8', margin: 0 }}>Filtering files...</h4>
+                          <span style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', display: 'block' }}>
+                            {docifyLoadingStep >= 3 ? '452 files processed, 21 ignored' : (docifyLoadingStep === 2 ? 'Analyzing directory structure...' : 'Pending current process')}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Step 3: Generating */}
+                      <div style={{ display: 'flex', gap: '16px', zIndex: 2 }}>
+                        <div style={{
+                          width: '24px',
+                          height: '24px',
+                          borderRadius: '50%',
+                          background: docifyLoadingStep >= 4 ? 'rgba(16, 185, 129, 0.15)' : (docifyLoadingStep === 3 ? 'rgba(59, 130, 246, 0.15)' : '#0f172a'),
+                          border: docifyLoadingStep >= 4 ? '2px solid #10b981' : (docifyLoadingStep === 3 ? '2px solid #3b82f6' : '2px solid #1e293b'),
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}>
+                          {docifyLoadingStep >= 4 ? (
+                            <Check size={12} style={{ color: '#10b981' }} />
+                          ) : (
+                            <div style={{
+                              width: '6px',
+                              height: '6px',
+                              borderRadius: '50%',
+                              background: docifyLoadingStep === 3 ? '#3b82f6' : '#475569'
+                            }} />
+                          )}
+                        </div>
+                        <div>
+                          <h4 style={{ fontSize: '13px', fontWeight: docifyLoadingStep === 3 ? 600 : 500, color: docifyLoadingStep === 3 ? '#f8fafc' : '#94a3b8', margin: 0 }}>Generating JSON...</h4>
+                          <span style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', display: 'block' }}>
+                            {docifyLoadingStep >= 4 ? 'Extracting signatures completed' : (docifyLoadingStep === 3 ? 'Extracting signatures: Step 4/12' : 'Pending current process')}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Step 4: Converting */}
+                      <div style={{ display: 'flex', gap: '16px', zIndex: 2 }}>
+                        <div style={{
+                          width: '24px',
+                          height: '24px',
+                          borderRadius: '50%',
+                          background: docifyLoadingStep >= 5 ? 'rgba(16, 185, 129, 0.15)' : (docifyLoadingStep === 4 ? 'rgba(59, 130, 246, 0.15)' : '#0f172a'),
+                          border: docifyLoadingStep >= 5 ? '2px solid #10b981' : (docifyLoadingStep === 4 ? '2px solid #3b82f6' : '2px solid #1e293b'),
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}>
+                          {docifyLoadingStep >= 5 ? (
+                            <Check size={12} style={{ color: '#10b981' }} />
+                          ) : (
+                            <div style={{
+                              width: '6px',
+                              height: '6px',
+                              borderRadius: '50%',
+                              background: docifyLoadingStep === 4 ? '#3b82f6' : '#475569'
+                            }} />
+                          )}
+                        </div>
+                        <div>
+                          <h4 style={{ fontSize: '13px', fontWeight: docifyLoadingStep === 4 ? 600 : 500, color: docifyLoadingStep === 4 ? '#f8fafc' : '#94a3b8', margin: 0 }}>Converting to Doc...</h4>
+                          <span style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', display: 'block' }}>
+                            {docifyLoadingStep >= 5 ? 'Document generated successfully' : (docifyLoadingStep === 4 ? 'Formating layout & syntax...' : 'Pending current process')}
+                          </span>
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+
+                  {/* Agent Config bottom card */}
+                  <div style={{
+                    marginTop: 'auto',
+                    background: 'rgba(30, 41, 59, 0.25)',
+                    border: '1px solid #1e293b',
+                    borderRadius: '8px',
+                    padding: '16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Settings size={14} style={{ color: '#94a3b8' }} />
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: '#f1f5f9' }}>Agent Config</span>
+                    </div>
+                    <p style={{ fontSize: '11px', color: '#64748b', margin: 0, lineHeight: '1.5' }}>
+                      Infrastructure v2.4 running with signature extraction enabled.
+                    </p>
+                  </div>
+
+                </div>
+
+                {/* Right Panel: File Preview */}
+                <div style={{
+                  flex: 1,
+                  background: 'rgba(15, 23, 42, 0.4)',
+                  border: '1px solid #1e293b',
+                  borderRadius: '12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                  boxSizing: 'border-box'
+                }}>
+                  
+                  {/* File Header */}
+                  <div style={{
+                    padding: '16px 20px',
+                    borderBottom: '1px solid #1e293b',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    background: 'rgba(15, 23, 42, 0.2)'
+                  }}>
+                    <div style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '6px',
+                      background: 'rgba(59, 130, 246, 0.1)',
+                      border: '1px solid rgba(59, 130, 246, 0.2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#3b82f6'
+                    }}>
+                      <FileText size={16} />
+                    </div>
+                    <div>
+                      <h3 style={{ fontSize: '14px', fontWeight: 600, color: '#f8fafc', margin: 0 }}>
+                        {docifyRepoUrl ? `${docifyRepoUrl.split('/').pop()}-docs.docx` : 'repo-name-docs.docx'}
+                      </h3>
+                      <span style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', display: 'block' }}>Generated Documentation · Draft v1.0</span>
+                    </div>
+                  </div>
+
+                  {/* Body Preview Canvas */}
+                  <div style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: '#0d111c',
+                    position: 'relative',
+                    padding: '24px',
+                    overflowY: 'auto'
+                  }}>
+                    
+                    {docifyStatus === 'idle' && (
+                      <div style={{ textAlign: 'center', maxWidth: '320px' }}>
+                        <FileText size={32} style={{ color: '#475569', marginBottom: '12px' }} />
+                        <h4 style={{ fontSize: '13px', fontWeight: 600, color: '#94a3b8', margin: '0 0 6px 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Awaiting Analysis</h4>
+                        <p style={{ fontSize: '11px', color: '#64748b', margin: 0 }}>Ingresa la URL del repositorio de Git y presiona "Analyze" para generar la documentación del código.</p>
+                      </div>
+                    )}
+
+                    {(docifyStatus !== 'idle' && docifyStatus !== 'ready') && (
+                      <div style={{
+                        background: 'rgba(15, 23, 42, 0.7)',
+                        border: '1px solid #1e293b',
+                        borderRadius: '8px',
+                        padding: '16px 24px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+                        zIndex: 10
+                      }}>
+                        <Loader2 size={16} style={{ color: '#3b82f6', animation: 'spin 1s linear infinite' }} />
+                        <span style={{ fontSize: '12px', fontWeight: 600, color: '#f8fafc', letterSpacing: '0.05em' }}>PREVIEW GENERATING...</span>
+                      </div>
+                    )}
+
+                     {docifyStatus === 'ready' && (() => {
+                      const info = getRepoDocInfo(docifyRepoUrl);
+                      return (
+                        <div style={{
+                          width: '100%',
+                          height: '100%',
+                          background: '#080c14',
+                          borderRadius: '6px',
+                          border: '1px solid #1e293b',
+                          padding: '24px',
+                          fontFamily: '"Inter", sans-serif',
+                          color: '#cbd5e1',
+                          textAlign: 'left',
+                          boxSizing: 'border-box'
+                        }}>
+                          <h1 style={{ fontSize: '20px', fontWeight: 700, color: '#f8fafc', borderBottom: '1px solid #1e293b', paddingBottom: '12px', marginTop: 0 }}>
+                            Documentación de Código: {info.repoName}
+                          </h1>
+                          <p style={{ fontSize: '13px', lineHeight: '1.6', color: '#94a3b8', marginBottom: '20px' }}>
+                            Stack principal: <strong style={{ color: '#3b82f6' }}>{info.techStack}</strong>. Esta guía detalla la arquitectura técnica por sesiones del proyecto.
+                          </p>
+
+                          {info.sections.map((sec, sidx) => (
+                            <div key={sidx} style={{ marginBottom: '24px' }}>
+                              <h2 style={{ fontSize: '14px', fontWeight: 600, color: '#3b82f6', borderBottom: '1px solid #1e293b', paddingBottom: '6px', margin: '16px 0 10px 0' }}>
+                                {sec.title}
+                              </h2>
+                              <ul style={{ paddingLeft: '20px', fontSize: '12px', lineHeight: '1.8', color: '#cbd5e1', margin: 0 }}>
+                                {sec.items.map((item, iidx) => (
+                                  <li key={iidx} style={{ marginBottom: '6px' }}>
+                                    <strong style={{ color: '#f8fafc' }}>{item.name}</strong>: {item.desc}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+
+                  </div>
+
+                  {/* Actions Status Bar Footer */}
+                  <div style={{
+                    padding: '12px 20px',
+                    borderTop: '1px solid #1e293b',
+                    background: 'rgba(15, 23, 42, 0.3)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981', display: 'block' }}></span>
+                      <span style={{ fontSize: '11px', color: '#10b981', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>Agent Live</span>
+                      <span style={{ fontSize: '11px', color: '#475569' }}>| Automatic sync enabled</span>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        onClick={handleDownloadDocifyDoc}
+                        disabled={docifyStatus !== 'ready'}
+                        style={{
+                          background: '#1e293b',
+                          border: '1px solid #334155',
+                          borderRadius: '6px',
+                          color: docifyStatus === 'ready' ? '#f8fafc' : '#475569',
+                          padding: '6px 16px',
+                          fontSize: '12px',
+                          cursor: docifyStatus === 'ready' ? 'pointer' : 'not-allowed',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          fontWeight: 500
+                        }}
+                      >
+                        <Download size={13} />
+                        Download Doc
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          if (docifyStatus !== 'ready') return;
+                          showNotification('Confirmando cambios al repositorio de Git...');
+                        }}
+                        disabled={docifyStatus !== 'ready'}
+                        style={{
+                          background: docifyStatus === 'ready' ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                          border: '1px solid rgba(59, 130, 246, 0.2)',
+                          borderRadius: '6px',
+                          color: docifyStatus === 'ready' ? '#3b82f6' : '#475569',
+                          padding: '6px 16px',
+                          fontSize: '12px',
+                          cursor: docifyStatus === 'ready' ? 'pointer' : 'not-allowed',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          fontWeight: 600
+                        }}
+                      >
+                        <GitBranch size={13} />
+                        Commit to Git
+                      </button>
+                    </div>
+
+                  </div>
+
+                </div>
+
+              </div>
+
             </div>
           )}
 
