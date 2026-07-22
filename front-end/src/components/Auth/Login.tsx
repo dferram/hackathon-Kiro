@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Eye, EyeOff } from 'lucide-react'
+import { Lock, User, Eye, EyeOff, ArrowRight } from 'lucide-react'
 import logoImg from '../../logo/logo.jpeg'
 
 interface LoginProps {
@@ -54,12 +54,16 @@ export default function Login({
           <div className="auth-logo">
             <img src={logoImg} alt="DevSync Logo" style={{ width: '100%', height: '100%', borderRadius: '8px', objectFit: 'cover' }} />
           </div>
-          <h1 className="auth-app-title">DevSync</h1>
-          <p className="auth-app-subtitle">Production Environment • v4.2.0-stable</p>
+          <div className="auth-logo-text">DevSync</div>
+        </div>
+
+        <div className="auth-header-info">
+          <h1 className="auth-app-title">Access Developer Node</h1>
+          <p className="auth-app-subtitle">Connect to your synchronized workspace environment</p>
         </div>
 
         {isError && (
-          <div className="auth-alert-error spec-alert-bg">
+          <div className="auth-alert-error spec-alert-bg" style={{ marginBottom: '24px' }}>
             <div className="auth-alert-icon spec-alert-icon-color">!</div>
             <div className="auth-alert-content">
               <div className="auth-alert-title spec-alert-text-color">Authentication Failure</div>
@@ -69,38 +73,45 @@ export default function Login({
         )}
 
         <div className="auth-card">
-          <button className="btn-github-auth-white" onClick={() => { setAuthScreen('workspace'); showNotification('Sesión iniciada con GitHub!'); }}>
+          <button className="btn-github-auth-dark" onClick={() => { setAuthScreen('workspace'); showNotification('Sesión iniciada con GitHub!'); }}>
             <svg className="github-icon-svg" viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 8 }}><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
             Sign in with GitHub
           </button>
 
           <div className="auth-divider">
-            <span>OR ACCESS KEY</span>
+            <span>OR USE PROTOCOL</span>
           </div>
 
           <div className="auth-form-group">
-            <label className="auth-label-normal">Username</label>
-            <div className="auth-input-wrapper">
-              <input
-                type="text"
-                placeholder="Enter username"
-                className="auth-input clean-input"
+            <div className="auth-label-row">
+              <label className="auth-label">TERMINAL ADDRESS</label>
+            </div>
+            <div className={`auth-input-wrapper ${isError ? 'conflict-border' : ''}`}>
+              <User size={16} className="auth-input-icon" />
+              <input 
+                type="email" 
+                placeholder="developer@domain.com" 
+                className="auth-input"
                 value={authInputs.username}
                 onChange={(e) => setAuthInputs((prev: any) => ({ ...prev, username: e.target.value }))}
               />
+              {isError && (
+                <span className="auth-input-conflict-icon" style={{ right: '12px', top: '50%', transform: 'translateY(-50%)', position: 'absolute' }}>⚠️</span>
+              )}
             </div>
           </div>
 
           <div className="auth-form-group">
             <div className="auth-label-row">
-              <label className="auth-label-normal">Password</label>
-              <span className="auth-recover-link" onClick={() => { setAuthScreen('forgot'); setAuthMessage(null); }}>Recover</span>
+              <label className="auth-label">ACCESS KEY</label>
+              <span className="auth-link-spec" style={{ fontSize: '11px', cursor: 'pointer' }} onClick={() => { setAuthScreen('forgot'); setAuthMessage(null); }}>Recover</span>
             </div>
-            <div className="auth-input-wrapper">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                placeholder="••••••••"
-                className="auth-input clean-input"
+            <div className={`auth-input-wrapper ${isError ? 'conflict-border' : ''}`}>
+              <Lock size={16} className="auth-input-icon" />
+              <input 
+                type={showPassword ? 'text' : 'password'} 
+                placeholder="••••••••" 
+                className="auth-input"
                 value={authInputs.password}
                 onChange={(e) => setAuthInputs((prev: any) => ({ ...prev, password: e.target.value }))}
               />
@@ -110,23 +121,29 @@ export default function Login({
             </div>
           </div>
 
-          <button className="btn-auth-session-init" onClick={handleLogin}>
-            Initialize Session <span style={{ marginLeft: 6 }}>➔</span>
+          <button className="btn-auth-provision" onClick={handleLogin}>
+            Initialize Session <ArrowRight size={16} style={{ marginLeft: 6 }} />
           </button>
         </div>
 
         <p className="auth-footer-text">
-          Don't have an account? <span className="auth-link-spec" onClick={() => { setAuthScreen('register'); setAuthMessage(null); }}>Create account</span>
+          Don't have an account? <span className="auth-link-spec" style={{ cursor: 'pointer' }} onClick={() => { setAuthScreen('register'); setAuthMessage(null); }}>Create Developer Account</span>
         </p>
 
-        <div className="auth-page-footer-login">
-          <div className="footer-login-left">
+        <div className="auth-page-footer-register">
+          <div className="footer-register-left">
             <span className="footer-status-dot active"></span>
+            <span>SYSTEMS NOMINAL</span>
+          </div>
+          <div className="footer-register-middle">
             <span>CLUSTER: US-EAST-1</span>
           </div>
-          <div className="footer-login-right">
-            <span onClick={() => showNotification('Documentation opened')} className="footer-link-clickable">Documentation</span>
-            <span onClick={() => showNotification('Support opened')} className="footer-link-clickable" style={{ marginLeft: 12 }}>Support</span>
+          <div className="footer-register-right">
+            <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" strokeWidth="2" fill="none" style={{ marginRight: 4, transform: 'translateY(1px)' }}>
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+            <span>AES-256 GCM</span>
           </div>
         </div>
       </div>

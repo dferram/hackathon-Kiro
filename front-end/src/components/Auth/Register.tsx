@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Lock, User, Eye, EyeOff } from 'lucide-react'
+import { Lock, User, Eye, EyeOff, Zap } from 'lucide-react'
 import logoImg from '../../logo/logo.jpeg'
 
 interface RegisterProps {
@@ -135,7 +135,7 @@ export default function Register({
           </div>
 
           <button className="btn-auth-provision" onClick={handleRegister}>
-            Create Developer Account <span style={{ marginLeft: 6 }}>⚡</span>
+            Create Developer Account <Zap size={15} style={{ marginLeft: 6 }} />
           </button>
         </div>
 

@@ -1373,7 +1373,7 @@ input:checked + .slider:before {
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: radial-gradient(circle at center, #151e33 0%, #080c14 100%);
+  background: radial-gradient(ellipse at 50% 30%, #0f1729 0%, #060a11 70%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1436,22 +1436,22 @@ input:checked + .slider:before {
 }
 
 .auth-app-subtitle {
-  font-size: 11px;
+  font-size: 13px;
   color: #64748b;
   margin: 0;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
 }
 
 .auth-card {
   width: 100%;
-  background-color: #0c101b;
-  border: 1px solid #1e293b;
+  background-color: #0d1424;
+  border: 1px solid #1e2d45;
   border-radius: 12px;
-  padding: 32px;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+  padding: 28px;
+  box-shadow: 0 25px 40px -10px rgba(0, 0, 0, 0.7);
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 18px;
 }
 
 .btn-github-auth {
@@ -1543,19 +1543,20 @@ input:checked + .slider:before {
 
 .auth-input {
   width: 100%;
-  background-color: #070a12;
-  border: 1px solid #1e293b;
-  color: #f8fafc;
+  background-color: #070d1a;
+  border: 1px solid #1e2d45;
+  color: #e2e8f0;
   font-size: 13px;
-  padding: 10px 12px 10px 34px;
-  border-radius: 6px;
+  padding: 10px 12px 10px 40px;
+  border-radius: 8px;
   outline: none;
   transition: all 0.2s;
+  font-family: var(--font-sans);
 }
 
 .auth-input:focus {
-  border-color: #38bdf8;
-  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.2);
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
 }
 
 .auth-input-hint {
@@ -1975,13 +1976,13 @@ input:checked + .slider:before {
 
 .btn-github-auth-dark {
   width: 100%;
-  background-color: #1e2538;
-  border: 1px solid #334155;
-  color: #ffffff;
+  background-color: #141d2e;
+  border: 1px solid #253550;
+  color: #e2e8f0;
   font-size: 14px;
-  font-weight: 600;
-  padding: 10px 16px;
-  border-radius: 6px;
+  font-weight: 500;
+  padding: 11px 16px;
+  border-radius: 8px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1991,7 +1992,8 @@ input:checked + .slider:before {
 }
 
 .btn-github-auth-dark:hover {
-  background-color: #334155;
+  background-color: #1e2d45;
+  border-color: #3b82f6;
 }
 
 .auth-label-normal {
@@ -2028,24 +2030,26 @@ input:checked + .slider:before {
 
 .btn-auth-provision {
   width: 100%;
-  background-color: #b4c6fc;
-  border: 1px solid #b4c6fc;
-  color: #0f172a;
+  background-color: #3b82f6;
+  border: 1px solid #3b82f6;
+  color: #ffffff;
   font-size: 14px;
-  font-weight: 700;
-  padding: 11px 16px;
+  font-weight: 600;
+  padding: 12px 16px;
   border-radius: 6px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s;
+  letter-spacing: 0.2px;
 }
 
 .btn-auth-provision:hover {
-  background-color: #abc2f7;
-  border-color: #abc2f7;
+  background-color: #2563eb;
+  border-color: #2563eb;
   transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
 }
 
 .auth-link-spec {
