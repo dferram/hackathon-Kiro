@@ -25,10 +25,17 @@ import {
   GitBranch,
   Sparkles,
   Bell,
-  ArrowLeft
+  ArrowLeft,
+  Save,
+  FolderOpen,
+  Clock,
+  LayoutGrid
 } from 'lucide-react'
 import { DashboardHome } from '../Dashboard/DashboardHome'
 import { UserProfileView } from '../Dashboard/UserProfileView'
+import { BandwidthView, BandwidthSidebar } from '../Dashboard/BandwidthView'
+
+type BwTab = 'home' | 'tree' | 'commits'
 
 interface DatabaseDesignerProps {
   setAuthScreen: (screen: any) => void
@@ -52,6 +59,15 @@ interface Table {
   x: number
   y: number
   columns: Column[]
+}
+
+interface SavedSchema {
+  id: string
+  name: string
+  tables: Table[]
+  importCode: string
+  savedAt: string
+  tableCount: number
 }
 
 // Helper to escape HTML characters
@@ -152,6 +168,10 @@ export default function DatabaseDesigner({
   const [activeMasterTab, setActiveMasterTab] = useState<'home' | 'blueprint' | 'bandwidth' | 'mergeguard' | 'docify' | 'deeplint' | 'profile'>('home')
   const [selectedTableId, setSelectedTableId] = useState<string | null>('orders')
   const [selectedRelationId, setSelectedRelationId] = useState<string | null>(null)
+  
+  // Bandwidth State
+  const [bwTab, setBwTab] = useState<BwTab>('tree')
+  const [bwSelectedBranch, setBwSelectedBranch] = useState<string | null>(null)
   const [zoom, setZoom] = useState<number>(100)
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [auditLogging, setAuditLogging] = useState<boolean>(true)
@@ -176,6 +196,19 @@ export default function DatabaseDesigner({
   const [selectedIndexColId, setSelectedIndexColId] = useState<string>('')
 
   const [isPropertiesCollapsed, setIsPropertiesCollapsed] = useState<boolean>(false)
+
+  // Save system state
+  const [savedSchemas, setSavedSchemas] = useState<SavedSchema[]>(() => {
+    try {
+      const stored = localStorage.getItem('db_blueprint_saves')
+      return stored ? JSON.parse(stored) : []
+    } catch {
+      return []
+    }
+  })
+  const [showSavedPanel, setShowSavedPanel] = useState<boolean>(false)
+  const [saveDialogOpen, setSaveDialogOpen] = useState<boolean>(false)
+  const [saveDialogName, setSaveDialogName] = useState<string>('')
 
   // Dragging table node state
   const [draggingTableId, setDraggingTableId] = useState<string | null>(null)
@@ -588,6 +621,53 @@ export default function DatabaseDesigner({
     setTimeout(() => setCopied(false), 2000)
   }
 
+  // ── Save System ──────────────────────────────────────────────────────────
+  const persistSaves = (saves: SavedSchema[]) => {
+    localStorage.setItem('db_blueprint_saves', JSON.stringify(saves))
+    setSavedSchemas(saves)
+  }
+
+  const handleOpenSaveDialog = () => {
+    setSaveDialogName(`Schema ${new Date().toLocaleDateString('es-MX', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`)
+    setSaveDialogOpen(true)
+  }
+
+  const handleConfirmSave = () => {
+    if (!saveDialogName.trim()) return
+    const newSave: SavedSchema = {
+      id: `save_${Date.now()}`,
+      name: saveDialogName.trim(),
+      tables,
+      importCode,
+      savedAt: new Date().toISOString(),
+      tableCount: tables.length
+    }
+    const updated = [newSave, ...savedSchemas]
+    persistSaves(updated)
+    setSaveDialogOpen(false)
+    setSaveDialogName('')
+    showNotification(`✅ Schema "${newSave.name}" guardado!`)
+  }
+
+  const handleLoadSchema = (save: SavedSchema) => {
+    setTables(save.tables)
+    setImportCode(save.importCode)
+    setShowSavedPanel(false)
+    showNotification(`📂 Schema "${save.name}" cargado!`)
+  }
+
+  const handleDeleteSave = (id: string) => {
+    const updated = savedSchemas.filter(s => s.id !== id)
+    persistSaves(updated)
+    showNotification('Guardado eliminado')
+  }
+
+  const formatSavedDate = (isoString: string) => {
+    const d = new Date(isoString)
+    return d.toLocaleDateString('es-MX', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   // Export SQL file
   const handleExportScript = () => {
     const fullSql = generateFullSQL()
@@ -907,6 +987,14 @@ export default function DatabaseDesigner({
               </div>
             </div>
           </div>
+        ) : activeMasterTab === 'bandwidth' ? (
+          <BandwidthSidebar 
+            bwTab={bwTab} 
+            setBwTab={setBwTab} 
+            selectedBranch={bwSelectedBranch} 
+            setSelectedBranch={setBwSelectedBranch} 
+            onNavigateHome={() => setActiveMasterTab('home')}
+          />
         ) : (
           <>
             <div className="master-sidebar-logo-group">
@@ -1055,8 +1143,43 @@ export default function DatabaseDesigner({
                     <Code size={13} />
                     Split View
                   </button>
-                  <button className="btn-secondary" onClick={() => showNotification('Project saved successfully!')}>
+                  <button className="btn-secondary" onClick={handleOpenSaveDialog} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Save size={13} />
                     Save
+                  </button>
+                  <button
+                    className="btn-secondary"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      backgroundColor: showSavedPanel ? 'rgba(139,92,246,0.15)' : 'transparent',
+                      borderColor: showSavedPanel ? 'var(--accent-purple)' : 'var(--border-color)',
+                      color: showSavedPanel ? 'var(--accent-purple)' : 'var(--text-primary)',
+                      position: 'relative'
+                    }}
+                    onClick={() => setShowSavedPanel(!showSavedPanel)}
+                    title="Ver guardados"
+                  >
+                    <FolderOpen size={13} />
+                    Saves
+                    {savedSchemas.length > 0 && (
+                      <span style={{
+                        position: 'absolute',
+                        top: '-4px',
+                        right: '-4px',
+                        backgroundColor: 'var(--accent-purple)',
+                        color: 'white',
+                        borderRadius: '50%',
+                        width: '14px',
+                        height: '14px',
+                        fontSize: '9px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontWeight: 700
+                      }}>{savedSchemas.length}</span>
+                    )}
                   </button>
                   <button className="btn-primary" onClick={handleExportScript}>
                     <Download size={14} />
@@ -1065,8 +1188,48 @@ export default function DatabaseDesigner({
                 </div>
               </div>
 
+              {/* Save Dialog Modal */}
+              {saveDialogOpen && (
+                <div className="save-dialog-overlay" onClick={() => setSaveDialogOpen(false)}>
+                  <div className="save-dialog" onClick={e => e.stopPropagation()}>
+                    <div className="save-dialog-header">
+                      <Save size={16} style={{ color: 'var(--accent-blue)' }} />
+                      <span>Guardar Schema</span>
+                      <button className="icon-btn" onClick={() => setSaveDialogOpen(false)} style={{ marginLeft: 'auto' }}>
+                        <X size={14} />
+                      </button>
+                    </div>
+                    <div className="save-dialog-body">
+                      <label className="form-label" style={{ fontSize: '11px', marginBottom: '6px', display: 'block' }}>Nombre del guardado</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={saveDialogName}
+                        onChange={e => setSaveDialogName(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') handleConfirmSave() }}
+                        autoFocus
+                        placeholder="Mi schema v1..."
+                        style={{ width: '100%', marginBottom: '12px' }}
+                      />
+                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                        <button className="btn-secondary" onClick={() => setSaveDialogOpen(false)}>Cancelar</button>
+                        <button
+                          className="btn-primary"
+                          onClick={handleConfirmSave}
+                          disabled={!saveDialogName.trim()}
+                          style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                        >
+                          <Save size={13} />
+                          Guardar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Workspace Area */}
-              <div className="workspace-body" style={{ height: 'calc(100% - 48px)' }}>
+              <div className="workspace-body" style={{ height: 'calc(100% - 48px)', position: 'relative' }}>
 
                 {isSplitView && (
                   <aside className="split-editor-panel">
@@ -1309,6 +1472,99 @@ export default function DatabaseDesigner({
                   </div>
                 </main>
 
+                {/* ── Saved Schemas Drawer Panel ─────────────────────────── */}
+                {showSavedPanel && (
+                  <div className="saved-schemas-panel">
+                    <div className="saved-panel-header">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <FolderOpen size={15} style={{ color: 'var(--accent-purple)' }} />
+                        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>Saved Schemas</span>
+                        <span style={{
+                          backgroundColor: 'rgba(139,92,246,0.15)',
+                          color: 'var(--accent-purple)',
+                          borderRadius: '10px',
+                          padding: '1px 7px',
+                          fontSize: '10px',
+                          fontWeight: 700
+                        }}>{savedSchemas.length}</span>
+                      </div>
+                      <button className="icon-btn" onClick={() => setShowSavedPanel(false)} title="Cerrar panel">
+                        <X size={14} />
+                      </button>
+                    </div>
+
+                    <div className="saved-panel-body">
+                      {savedSchemas.length === 0 ? (
+                        <div className="saved-panel-empty">
+                          <div style={{ fontSize: '36px', marginBottom: '12px', opacity: 0.4 }}>💾</div>
+                          <p style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.5 }}>
+                            No hay guardados aún.<br />
+                            Usa el botón <strong>Save</strong> para guardar tu schema actual.
+                          </p>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          {savedSchemas.map((save, idx) => (
+                            <div key={save.id} className="saved-schema-card" style={{ animationDelay: `${idx * 40}ms` }}>
+                              <div className="saved-card-top">
+                                <div className="saved-card-icon">
+                                  <LayoutGrid size={13} style={{ color: 'var(--accent-purple)' }} />
+                                </div>
+                                <div className="saved-card-info">
+                                  <span className="saved-card-name">{save.name}</span>
+                                  <span className="saved-card-meta">
+                                    <Clock size={9} />
+                                    {formatSavedDate(save.savedAt)}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="saved-card-stats">
+                                <span className="saved-stat-badge">
+                                  <Database size={9} />
+                                  {save.tableCount} {save.tableCount === 1 ? 'tabla' : 'tablas'}
+                                </span>
+                                <span className="saved-stat-badge">
+                                  <Link2 size={9} />
+                                  {save.tables.reduce((acc, t) => acc + t.columns.filter(c => c.isForeignKey).length, 0)} rels
+                                </span>
+                              </div>
+                              <div className="saved-card-actions">
+                                <button
+                                  className="saved-action-load"
+                                  onClick={() => handleLoadSchema(save)}
+                                  title="Cargar este schema"
+                                >
+                                  <FolderOpen size={11} />
+                                  Cargar
+                                </button>
+                                <button
+                                  className="saved-action-delete"
+                                  onClick={() => handleDeleteSave(save.id)}
+                                  title="Eliminar guardado"
+                                >
+                                  <Trash2 size={11} />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="saved-panel-footer">
+                      <button
+                        className="btn-primary"
+                        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '12px' }}
+                        onClick={handleOpenSaveDialog}
+                      >
+                        <Save size={13} />
+                        Guardar schema actual
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {/* ─────────────────────────────────────────────────────────── */}
+
                 {/* Right side Properties Panel */}
                 <aside className={`right-panel ${isPropertiesCollapsed ? 'collapsed' : ''}`}>
                   <div 
@@ -1504,12 +1760,22 @@ export default function DatabaseDesigner({
                     </div>
                   )}
                 </aside>
+
               </div>
 
             </div>
           )}
 
-          {activeMasterTab !== 'home' && activeMasterTab !== 'blueprint' && activeMasterTab !== 'profile' && (
+          {activeMasterTab === 'bandwidth' && (
+            <BandwidthView 
+              bwTab={bwTab}
+              setBwTab={setBwTab}
+              selectedBranch={bwSelectedBranch} 
+              setSelectedBranch={setBwSelectedBranch} 
+            />
+          )}
+
+          {activeMasterTab !== 'home' && activeMasterTab !== 'blueprint' && activeMasterTab !== 'profile' && activeMasterTab !== 'bandwidth' && (
             <div className="placeholder-tab-content" style={{ padding: '40px', color: 'var(--text-muted)', textAlign: 'center' }}>
               <h2>{activeMasterTab.toUpperCase()} Module</h2>
               <p style={{ fontSize: '14px', marginTop: '8px' }}>This component is fully active and synchronized with production environment.</p>
