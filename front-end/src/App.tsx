@@ -7,11 +7,23 @@ import DatabaseDesigner from './components/DatabaseDesigner/DatabaseDesigner'
 import './App.css'
 
 export default function App() {
-  const [authScreen, setAuthScreen] = useState<'login' | 'register' | 'forgot' | 'success' | 'workspace'>('login')
+  const [authScreen, setAuthScreen] = useState<'login' | 'register' | 'forgot' | 'success' | 'workspace'>(() => {
+    const saved = localStorage.getItem('authSession')
+    return saved === 'active' ? 'workspace' : 'login'
+  })
   const [authInputs, setAuthInputs] = useState({ fullName: '', username: '', password: '' })
   const [authMessage, setAuthMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const [registerConflict, setRegisterConflict] = useState<boolean>(false)
   const [notification, setNotification] = useState<string | null>(null)
+
+  const handleSetAuthScreen = (screen: 'login' | 'register' | 'forgot' | 'success' | 'workspace') => {
+    setAuthScreen(screen)
+    if (screen === 'workspace') {
+      localStorage.setItem('authSession', 'active')
+    } else if (screen === 'login') {
+      localStorage.removeItem('authSession')
+    }
+  }
 
   const showNotification = (message: string) => {
     setNotification(message)
@@ -48,7 +60,7 @@ export default function App() {
           setAuthInputs={setAuthInputs}
           authMessage={authMessage}
           setAuthMessage={setAuthMessage}
-          setAuthScreen={setAuthScreen}
+          setAuthScreen={handleSetAuthScreen}
           showNotification={showNotification}
         />
       )}
@@ -59,7 +71,7 @@ export default function App() {
           setAuthInputs={setAuthInputs}
           registerConflict={registerConflict}
           setRegisterConflict={setRegisterConflict}
-          setAuthScreen={setAuthScreen}
+          setAuthScreen={handleSetAuthScreen}
           showNotification={showNotification}
         />
       )}
@@ -68,21 +80,21 @@ export default function App() {
         <ForgotPassword
           authInputs={authInputs}
           setAuthInputs={setAuthInputs}
-          setAuthScreen={setAuthScreen}
+          setAuthScreen={handleSetAuthScreen}
           showNotification={showNotification}
         />
       )}
 
       {authScreen === 'success' && (
         <Success
-          setAuthScreen={setAuthScreen}
+          setAuthScreen={handleSetAuthScreen}
           showNotification={showNotification}
         />
       )}
 
       {authScreen === 'workspace' && (
         <DatabaseDesigner
-          setAuthScreen={setAuthScreen}
+          setAuthScreen={handleSetAuthScreen}
           showNotification={showNotification}
         />
       )}

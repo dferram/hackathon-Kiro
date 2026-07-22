@@ -105,19 +105,20 @@ body {
   stroke: #475569;
   stroke-width: 2;
   fill: none;
-  stroke-dasharray: 4 4;
-  animation: dash 30s linear infinite;
+  stroke-dasharray: 6 4;
+  animation: dash 3s linear infinite;
   transition: stroke 0.2s, stroke-width 0.2s;
 }
 
 .connection-line.selected {
-  stroke: var(--accent-blue);
+  stroke: #10b981;
   stroke-width: 3;
-  stroke-dasharray: none;
+  stroke-dasharray: 6 4;
+  animation: dash 1.5s linear infinite;
 }
 
 @keyframes dash {
   to {
-    stroke-dashoffset: -1000;
+    stroke-dashoffset: -40;
   }
 }

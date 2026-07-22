@@ -20,9 +20,15 @@ import {
   Trash2,
   HelpCircle,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Home,
+  GitBranch,
+  Sparkles,
+  Bell,
+  ArrowLeft
 } from 'lucide-react'
-import logoImg from '../../logo/logo.jpeg'
+import { DashboardHome } from '../Dashboard/DashboardHome'
+import { UserProfileView } from '../Dashboard/UserProfileView'
 
 interface DatabaseDesignerProps {
   setAuthScreen: (screen: any) => void
@@ -89,10 +95,31 @@ const highlightShorthand = (code: string) => {
   }).join('\n')
 }
 
+// Serialize tables back to shorthand syntax
+const serializeTablesToShorthand = (currentTables: Table[]) => {
+  return currentTables.map(t => {
+    const colsStr = t.columns.map(c => {
+      let line = `  ${c.name} ${c.type}`
+      if (c.isPrimaryKey) line += ' pk'
+      if (c.isForeignKey && c.foreignKeyTargetTableId) {
+        const targetTableObj = currentTables.find(tbl => tbl.id === c.foreignKeyTargetTableId)
+        const targetColObj = targetTableObj?.columns.find(col => col.id === c.foreignKeyTargetColumnId)
+        if (targetTableObj && targetColObj) {
+          line += ` fk ${targetTableObj.name.toLowerCase()}.${targetColObj.name}`
+        }
+      }
+      return line
+    }).join('\n')
+    return `${t.name.toLowerCase()} {\n${colsStr}\n}`
+  }).join('\n\n')
+}
+
 export default function DatabaseDesigner({
   setAuthScreen,
   showNotification
 }: DatabaseDesignerProps) {
+  const loggedInUserName = localStorage.getItem('userFullName') || 'Alex Dev'
+
   // State for database schema
   const [tables, setTables] = useState<Table[]>([
     {
@@ -122,7 +149,9 @@ export default function DatabaseDesigner({
   ])
 
   // UI state
+  const [activeMasterTab, setActiveMasterTab] = useState<'home' | 'blueprint' | 'bandwidth' | 'mergeguard' | 'docify' | 'deeplint' | 'profile'>('home')
   const [selectedTableId, setSelectedTableId] = useState<string | null>('orders')
+  const [selectedRelationId, setSelectedRelationId] = useState<string | null>(null)
   const [zoom, setZoom] = useState<number>(100)
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [auditLogging, setAuditLogging] = useState<boolean>(true)
@@ -133,22 +162,29 @@ export default function DatabaseDesigner({
 
   // Split View Editor state
   const [isSplitView, setIsSplitView] = useState<boolean>(true)
-  const [editorTab, setEditorTab] = useState<'shorthand' | 'sql'>('shorthand')
   const [showToast, setShowToast] = useState<boolean>(true)
+  const [importError, setImportError] = useState<string | null>(null)
   const [importCode, setImportCode] = useState<string>(
     'users {\n  id UUID pk\n  email String\n  created_at Timestamp\n}\n\norders {\n  id UUID pk\n  user_id UUID fk users.id\n  total Decimal\n}'
   )
-  const [importError, setImportError] = useState<string | null>(null)
 
   // Indices & Queries custom state
   const [customIndices, setCustomIndices] = useState<Array<{ id: string; name: string; tableName: string; columnName: string }>>([
     { id: 'idx_users_email', name: 'idx_users_email', tableName: 'users', columnName: 'email' }
   ])
+  const [selectedIndexTableId, setSelectedIndexTableId] = useState<string>('')
+  const [selectedIndexColId, setSelectedIndexColId] = useState<string>('')
 
   const [isPropertiesCollapsed, setIsPropertiesCollapsed] = useState<boolean>(false)
 
   // Dragging table node state
   const [draggingTableId, setDraggingTableId] = useState<string | null>(null)
+  const [relationDragging, setRelationDragging] = useState<{
+    sourceTableId: string
+    sourceColumnId: string
+    currentX: number
+    currentY: number
+  } | null>(null)
   const dragStart = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
   const panStart = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -164,10 +200,100 @@ export default function DatabaseDesigner({
     if (e.target === canvasRef.current || (e.target as HTMLElement).classList.contains('canvas-content')) {
       setIsPanning(true)
       panStart.current = { x: e.clientX - panOffset.x, y: e.clientY - panOffset.y }
+      setSelectedRelationId(null)
     }
   }
 
+  const handleRelationDragStart = (e: React.MouseEvent, tableId: string, colId: string) => {
+    e.stopPropagation()
+    e.preventDefault()
+    const rect = canvasRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const zoomFactor = zoom / 100
+    const clientX = (e.clientX - rect.left - panOffset.x) / zoomFactor
+    const clientY = (e.clientY - rect.top - panOffset.y) / zoomFactor
+    setRelationDragging({
+      sourceTableId: tableId,
+      sourceColumnId: colId,
+      currentX: clientX,
+      currentY: clientY
+    })
+  }
+
+  const handleRelationDragEnd = (e: React.MouseEvent, targetTableId: string, targetColId: string) => {
+    e.stopPropagation()
+    if (!relationDragging) return
+    const { sourceTableId, sourceColumnId } = relationDragging
+    setRelationDragging(null)
+    if (sourceTableId === targetTableId) {
+      showNotification("No se puede relacionar columnas de la misma tabla")
+      return
+    }
+
+    const updatedTables = tables.map(t => {
+      if (t.id === sourceTableId) {
+        return {
+          ...t,
+          columns: t.columns.map(c => {
+            if (c.id === sourceColumnId) {
+              return {
+                ...c,
+                isForeignKey: true,
+                foreignKeyTargetTableId: targetTableId,
+                foreignKeyTargetColumnId: targetColId
+              }
+            }
+            return c
+          })
+        }
+      }
+      return t
+    })
+
+    setTables(updatedTables)
+    setImportCode(serializeTablesToShorthand(updatedTables))
+    showNotification("Relación creada visualmente!")
+  }
+
+  const handleDeleteRelation = (sourceTableId: string, sourceColumnId: string) => {
+    const updatedTables = tables.map(t => {
+      if (t.id === sourceTableId) {
+        return {
+          ...t,
+          columns: t.columns.map(c => {
+            if (c.id === sourceColumnId) {
+              return {
+                ...c,
+                isForeignKey: false,
+                foreignKeyTargetTableId: undefined,
+                foreignKeyTargetColumnId: undefined
+              }
+            }
+            return c
+          })
+        }
+      }
+      return t
+    })
+
+    setTables(updatedTables)
+    setImportCode(serializeTablesToShorthand(updatedTables))
+    setSelectedRelationId(null)
+    showNotification("Relación eliminada!")
+  }
+
   const handleCanvasMouseMove = (e: React.MouseEvent) => {
+    if (relationDragging) {
+      const rect = canvasRef.current?.getBoundingClientRect()
+      if (rect) {
+        const zoomFactor = zoom / 100
+        const clientX = (e.clientX - rect.left - panOffset.x) / zoomFactor
+        const clientY = (e.clientY - rect.top - panOffset.y) / zoomFactor
+        setRelationDragging(prev => prev ? { ...prev, currentX: clientX, currentY: clientY } : null)
+      }
+      return
+    }
+
     if (isPanning) {
       setPanOffset({
         x: e.clientX - panStart.current.x,
@@ -192,6 +318,7 @@ export default function DatabaseDesigner({
   const handleCanvasMouseUp = () => {
     setIsPanning(false)
     setDraggingTableId(null)
+    setRelationDragging(null)
   }
 
   // Handle Table dragging
@@ -344,7 +471,9 @@ export default function DatabaseDesigner({
 
   // Delete Table
   const handleDeleteTable = (tableId: string) => {
-    setTables(prev => prev.filter(t => t.id !== tableId))
+    const updated = tables.filter(t => t.id !== tableId)
+    setTables(updated)
+    setImportCode(serializeTablesToShorthand(updated))
     if (selectedTableId === tableId) {
       setSelectedTableId(null)
     }
@@ -478,6 +607,10 @@ export default function DatabaseDesigner({
       id: string
       path: string
       targetTableId: string
+      sourceTableId: string
+      sourceColumnId: string
+      midX: number
+      midY: number
     }> = []
 
     tables.forEach(sourceTable => {
@@ -504,11 +637,17 @@ export default function DatabaseDesigner({
             const cp2x = sourceOnRight ? xTarget + offset : xTarget - offset
 
             const path = `M ${xSource} ${ySource} C ${cp1x} ${ySource}, ${cp2x} ${yTarget}, ${xTarget} ${yTarget}`
+            const midX = 0.125 * xSource + 0.375 * cp1x + 0.375 * cp2x + 0.125 * xTarget
+            const midY = 0.5 * ySource + 0.5 * yTarget
 
             points.push({
               id: `${sourceTable.id}_${col.id}_to_${targetTable.id}`,
               path,
-              targetTableId: targetTable.id
+              targetTableId: targetTable.id,
+              sourceTableId: sourceTable.id,
+              sourceColumnId: col.id,
+              midX,
+              midY
             })
           }
         }
@@ -520,611 +659,892 @@ export default function DatabaseDesigner({
 
   const relationLines = getRelationPoints()
 
+  // Listen to keyboard Delete/Backspace keys
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement
+      if (
+        activeEl &&
+        (activeEl.tagName === 'INPUT' ||
+          activeEl.tagName === 'TEXTAREA' ||
+          (activeEl as HTMLElement).isContentEditable)
+      ) {
+        return
+      }
+
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedRelationId) {
+          e.preventDefault()
+          const rel = relationLines.find(r => r.id === selectedRelationId)
+          if (rel) {
+            handleDeleteRelation(rel.sourceTableId, rel.sourceColumnId)
+          }
+        } else if (selectedTableId) {
+          e.preventDefault()
+          handleDeleteTable(selectedTableId)
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [selectedRelationId, selectedTableId, relationLines, tables])
+
   const filteredTables = tables.filter(t =>
     t.name.toLowerCase().includes(searchQuery.toLowerCase())
   )
-
   return (
-    <>
-      {/* Top Header Navigation */}
-      <header className="top-header">
-        <div className="header-left">
-          <div className="logo-text" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <img src={logoImg} alt="DevSync Logo" style={{ width: '20px', height: '20px', borderRadius: '4px', objectFit: 'cover' }} />
-            DevSync
+    <div className="devsync-dashboard-wrapper">
+      {/* Master Left Navigation Sidebar */}
+      <aside className="master-left-sidebar">
+        {activeMasterTab === 'blueprint' ? (
+          <div className="left-sidebar" style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: 'transparent', borderRight: 'none' }}>
+            <div className="master-sidebar-logo-group" style={{ cursor: 'pointer', borderBottom: '1px solid #131924' }} onClick={() => setActiveMasterTab('home')}>
+              <ArrowLeft size={16} style={{ color: '#94a3b8', marginRight: '8px' }} />
+              <div className="master-logo-text-group">
+                <span className="master-logo-text" style={{ fontSize: '13px' }}>Database Blueprint</span>
+                <span className="master-logo-sub">visual-schema</span>
+              </div>
+            </div>
+
+            <div className="sidebar-top" style={{ padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: '8px', flex: 1, overflowY: 'auto' }}>
+              <div className="explorer-card" style={{ marginBottom: '8px' }}>
+                <div className="explorer-icon-wrapper">
+                  <Database size={16} />
+                </div>
+                <div className="explorer-info">
+                  <h3>Schema Explorer</h3>
+                  <p>PostgreSQL v15</p>
+                </div>
+              </div>
+
+              <button className="btn-new-table" onClick={handleAddTable}>
+                <Plus size={14} />
+                NEW TABLE
+              </button>
+
+              <button
+                className="btn-new-table"
+                style={{
+                  backgroundColor: 'rgba(56, 189, 248, 0.08)',
+                  borderColor: 'var(--accent-blue)',
+                  color: 'var(--accent-blue)',
+                  marginTop: '4px'
+                }}
+                onClick={() => {
+                  setIsSplitView(!isSplitView)
+                }}
+              >
+                <Code size={14} />
+                {isSplitView ? 'CLOSE CODE EDITOR' : 'OPEN CODE EDITOR'}
+              </button>
+
+              <div className="sidebar-menu" style={{ padding: 0, marginTop: '12px' }}>
+                <div
+                  className={`menu-item ${activeMenuTab === 'TABLES' ? 'active' : ''}`}
+                  onClick={() => setActiveMenuTab('TABLES')}
+                >
+                  <Grid size={14} />
+                  TABLES ({filteredTables.length})
+                </div>
+                <div
+                  className={`menu-item ${activeMenuTab === 'RELATIONS' ? 'active' : ''}`}
+                  onClick={() => setActiveMenuTab('RELATIONS')}
+                >
+                  <Link2 size={14} />
+                  RELATIONS
+                </div>
+                <div
+                  className={`menu-item ${activeMenuTab === 'INDICES' ? 'active' : ''}`}
+                  onClick={() => setActiveMenuTab('INDICES')}
+                >
+                  <Key size={14} />
+                  INDICES
+                </div>
+              </div>
+
+              {activeMenuTab === 'TABLES' && (
+                <div className="sidebar-content-area" style={{ maxHeight: '280px', overflowY: 'auto' }}>
+                  <span className="sidebar-list-title">Tablas ({filteredTables.length})</span>
+                  {filteredTables.map(t => (
+                    <div 
+                      key={t.id} 
+                      className={`sidebar-list-item ${selectedTableId === t.id ? 'selected' : ''}`}
+                      onClick={() => setSelectedTableId(t.id)}
+                    >
+                      <span className="sidebar-item-name">
+                        <Database size={12} style={{ color: 'var(--accent-blue)', marginRight: '6px' }} />
+                        {t.name}
+                      </span>
+                      <span className="sidebar-item-meta">{t.columns.length} cols</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {activeMenuTab === 'RELATIONS' && (
+                <div className="sidebar-content-area" style={{ maxHeight: '280px', overflowY: 'auto' }}>
+                  <span className="sidebar-list-title">Relaciones ({relationLines.length})</span>
+                  {relationLines.map((line) => (
+                    <div key={line.id} className="sidebar-list-item" onClick={() => setSelectedTableId(line.targetTableId)}>
+                      <span className="sidebar-item-name" style={{ fontSize: '10px' }}>
+                        <Link2 size={12} style={{ color: 'var(--accent-green)', marginRight: '6px' }} />
+                        {line.id.replace('_to_', ' ➜ ').replace(/_[a-zA-Z0-9]+_/g, '.')}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {activeMenuTab === 'INDICES' && (
+                <div className="sidebar-content-area" style={{ maxHeight: '420px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <span className="sidebar-list-title">Índices ({customIndices.length})</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {customIndices.map(idx => (
+                      <div key={idx.id} className="sidebar-list-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span className="sidebar-item-name">
+                          <Key size={12} style={{ color: 'var(--accent-purple)', marginRight: '6px' }} />
+                          {idx.name}
+                        </span>
+                        <button
+                          onClick={() => {
+                            setCustomIndices(prev => prev.filter(i => i.id !== idx.id))
+                            showNotification("Índice eliminado")
+                          }}
+                          style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: '10px' }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="index-creator-form" style={{ marginTop: '12px', borderTop: '1px dashed #131924', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <span className="sidebar-list-title" style={{ fontSize: '10px' }}>NUEVO ÍNDICE</span>
+                    
+                    <select
+                      className="form-select"
+                      style={{ width: '100%', padding: '4px', fontSize: '11px', background: '#0d1117', border: '1px solid #1e293b', color: '#e2e8f0', borderRadius: '4px' }}
+                      value={selectedIndexTableId}
+                      onChange={(e) => {
+                        setSelectedIndexTableId(e.target.value)
+                        const tbl = tables.find(t => t.id === e.target.value)
+                        if (tbl && tbl.columns.length > 0) {
+                          setSelectedIndexColId(tbl.columns[0].id)
+                        }
+                      }}
+                    >
+                      <option value="">Selecciona Tabla...</option>
+                      {tables.map(t => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </select>
+
+                    {selectedIndexTableId && (() => {
+                      const tbl = tables.find(t => t.id === selectedIndexTableId)
+                      if (!tbl) return null
+                      return (
+                        <select
+                          className="form-select"
+                          style={{ width: '100%', padding: '4px', fontSize: '11px', background: '#0d1117', border: '1px solid #1e293b', color: '#e2e8f0', borderRadius: '4px' }}
+                          value={selectedIndexColId}
+                          onChange={(e) => setSelectedIndexColId(e.target.value)}
+                        >
+                          <option value="">Selecciona Columna...</option>
+                          {tbl.columns.map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                      )
+                    })()}
+
+                    <button
+                      className="btn-new-table"
+                      style={{ width: '100%', padding: '6px', fontSize: '11px', marginTop: '4px' }}
+                      onClick={() => {
+                        const tbl = tables.find(t => t.id === selectedIndexTableId)
+                        const col = tbl?.columns.find(c => c.id === selectedIndexColId)
+                        if (tbl && col) {
+                          const idxName = `idx_${tbl.name.toLowerCase()}_${col.name.toLowerCase()}`
+                          if (customIndices.some(i => i.name === idxName)) {
+                            showNotification("El índice ya existe")
+                            return
+                          }
+                          setCustomIndices(prev => [
+                            ...prev,
+                            {
+                              id: `idx_${Date.now()}`,
+                              name: idxName,
+                              tableName: tbl.name.toLowerCase(),
+                              columnName: col.name.toLowerCase()
+                            }
+                          ])
+                          showNotification(`Índice ${idxName} creado!`)
+                          setSelectedIndexTableId('')
+                          setSelectedIndexColId('')
+                        } else {
+                          showNotification("Selecciona tabla y columna")
+                        }
+                      }}
+                    >
+                      Crear Índice
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="master-sidebar-footer" style={{ borderTop: '1px solid #131924' }}>
+              <div className="master-footer-item" onClick={() => showNotification('Opening documentation...')}>
+                <FileText size={13} />
+                <span>DOCS</span>
+              </div>
+              <div className="master-footer-item" onClick={() => showNotification('Database Status: Connected')}>
+                <Activity size={13} />
+                <span>STATUS</span>
+              </div>
+            </div>
           </div>
-          <div className="search-container">
-            <Search className="search-icon-inside" size={14} />
-            <input
-              type="text"
-              placeholder="Search tables..."
-              className="search-input"
+        ) : (
+          <>
+            <div className="master-sidebar-logo-group">
+              <div className="master-logo-circle">
+                <svg className="master-logo-svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#38bdf8" strokeWidth="2.5">
+                  <path d="M12 12c-2-2.67-4-4-6-4A4 4 0 0 0 2 12a4 4 0 0 0 4 4c2 0 4-1.33 6-4Zm0 0c2-2.67 4-4 6-4a4 4 0 0 1 4 4 4 4 0 0 1-4 4c-2 0-4-1.33-6-4Z" />
+                </svg>
+              </div>
+              <div className="master-logo-text-group">
+                <span className="master-logo-text">DevSync</span>
+                <span className="master-logo-sub">Production Environment</span>
+              </div>
+            </div>
+
+            <nav className="master-sidebar-menu">
+              <div 
+                className={`master-menu-item ${activeMasterTab === 'home' ? 'active' : ''}`}
+                onClick={() => setActiveMasterTab('home')}
+              >
+                <Home size={16} />
+                <span>Home</span>
+              </div>
+              <div 
+                className="master-menu-item"
+                onClick={() => setActiveMasterTab('blueprint')}
+              >
+                <Code size={16} style={{ transform: 'rotate(-45deg)' }} />
+                <span>BluePrint</span>
+              </div>
+              <div 
+                className={`master-menu-item ${activeMasterTab === 'bandwidth' ? 'active' : ''}`}
+                onClick={() => setActiveMasterTab('bandwidth')}
+              >
+                <Activity size={16} />
+                <span>Bandwidth</span>
+              </div>
+              <div 
+                className={`master-menu-item ${activeMasterTab === 'mergeguard' ? 'active' : ''}`}
+                onClick={() => setActiveMasterTab('mergeguard')}
+              >
+                <GitBranch size={16} />
+                <span>MergeGuard</span>
+              </div>
+              <div 
+                className={`master-menu-item ${activeMasterTab === 'docify' ? 'active' : ''}`}
+                onClick={() => setActiveMasterTab('docify')}
+              >
+                <FileText size={16} />
+                <span>Docify</span>
+              </div>
+              <div 
+                className={`master-menu-item ${activeMasterTab === 'deeplint' ? 'active' : ''}`}
+                onClick={() => setActiveMasterTab('deeplint')}
+              >
+                <Sparkles size={16} />
+                <span>DeepLint</span>
+              </div>
+            </nav>
+
+            <div className="master-sidebar-footer">
+              <div className="master-footer-item" onClick={() => showNotification('Configuración abierta')}>
+                <Settings size={14} />
+                <span>Configuración</span>
+              </div>
+              <div className="master-footer-item" onClick={() => showNotification('Soporte')}>
+                <HelpCircle size={14} />
+                <span>Help</span>
+              </div>
+            </div>
+          </>
+        )}
+      </aside>
+
+      {/* Main Container Area */}
+      <div className="master-main-container">
+        {/* Top Search & Profile Header */}
+        <header className="master-top-header">
+          <div className="master-search-bar">
+            <Search size={14} className="search-icon" />
+            <input 
+              type="text" 
+              placeholder="Search projects, schemas, or docs..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <nav className="header-nav">
-            <span className="nav-link active">Project</span>
-            <span className="nav-link" onClick={() => showNotification('View options opened')}>View</span>
-            <span className="nav-link" onClick={() => showNotification('Engine properties opened')}>Engine</span>
-            <span className="nav-link" onClick={() => showNotification('Help documentation opened')}>Help</span>
-          </nav>
-        </div>
 
-        <div className="header-right">
-          <button className="icon-btn" title="Share Project" onClick={() => showNotification('Sharing link copied!')}>
-            <Share2 size={16} />
-          </button>
-          <button className="icon-btn" title="Project Settings" onClick={() => showNotification('Settings menu')}>
-            <Settings size={16} />
-          </button>
-          <button 
-            className="btn-secondary" 
-            style={{ 
-              backgroundColor: isSplitView ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
-              borderColor: isSplitView ? 'var(--accent-blue)' : 'var(--border-color)',
-              color: isSplitView ? 'var(--accent-blue)' : 'var(--text-primary)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}
-            onClick={() => setIsSplitView(!isSplitView)}
-          >
-            <Code size={14} />
-            Split View
-          </button>
-          <button className="btn-secondary" onClick={() => showNotification('Project saved successfully!')}>
-            Save
-          </button>
-          <button className="btn-primary" onClick={handleExportScript}>
-            <Download size={15} />
-            Export Script
-          </button>
-          <img
-            src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&auto=format&fit=crop&q=80"
-            alt="Profile Avatar"
-            className="profile-avatar"
-            onClick={() => {
-              setAuthScreen('login')
-              showNotification('Sesión cerrada con éxito')
-            }}
-            title="Cerrar sesión"
-            style={{ cursor: 'pointer' }}
-          />
-        </div>
-      </header>
-
-      {/* Workspace Area */}
-      <div className="workspace-body">
-        {/* Left Sidebar */}
-        <aside className="left-sidebar">
-          <div className="sidebar-top">
-            <div className="explorer-card">
-              <div className="explorer-icon-wrapper">
-                <Database size={16} />
-              </div>
-              <div className="explorer-info">
-                <h3>Schema Explorer</h3>
-                <p>PostgreSQL v15</p>
-              </div>
-            </div>
-
-            <button className="btn-new-table" onClick={handleAddTable}>
-              <Plus size={14} />
-              NEW TABLE
+          <div className="master-header-right">
+            <button className="icon-btn notification-bell" onClick={() => showNotification('No hay nuevas notificaciones')} title="Notifications">
+              <Bell size={16} />
+              <span className="bell-badge"></span>
             </button>
 
-            <button
-              className="btn-new-table"
-              style={{
-                backgroundColor: 'rgba(56, 189, 248, 0.08)',
-                borderColor: 'var(--accent-blue)',
-                color: 'var(--accent-blue)',
-                marginTop: '4px'
-              }}
-              onClick={() => {
-                setImportError(null)
-                setIsSplitView(!isSplitView)
-              }}
-            >
-              <Code size={14} />
-              {isSplitView ? 'CLOSE CODE EDITOR' : 'OPEN CODE EDITOR'}
-            </button>
-
-            <div className="sidebar-menu">
-              <div
-                className={`menu-item ${activeMenuTab === 'TABLES' ? 'active' : ''}`}
-                onClick={() => setActiveMenuTab('TABLES')}
-              >
-                <Grid size={14} />
-                TABLES ({filteredTables.length})
+            <div className="master-user-profile" title="Ver Perfil" onClick={() => {
+              setActiveMasterTab('profile');
+            }}>
+              <div className="profile-info">
+                <span className="profile-name">{loggedInUserName}</span>
+                <span className="profile-role">Lead Engineer</span>
               </div>
-              <div
-                className={`menu-item ${activeMenuTab === 'RELATIONS' ? 'active' : ''}`}
-                onClick={() => setActiveMenuTab('RELATIONS')}
-              >
-                <Link2 size={14} />
-                RELATIONS
-              </div>
-              <div
-                className={`menu-item ${activeMenuTab === 'INDICES' ? 'active' : ''}`}
-                onClick={() => setActiveMenuTab('INDICES')}
-              >
-                <Key size={14} />
-                INDICES
-              </div>
+              <img
+                src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&auto=format&fit=crop&q=80"
+                alt="Profile Avatar"
+                className="master-profile-avatar"
+              />
             </div>
+          </div>
+        </header>
 
-            {activeMenuTab === 'TABLES' && (
-              <div className="sidebar-content-area">
-                <span className="sidebar-list-title">Tablas ({filteredTables.length})</span>
-                {filteredTables.map(t => (
-                  <div 
-                    key={t.id} 
-                    className={`sidebar-list-item ${selectedTableId === t.id ? 'selected' : ''}`}
-                    onClick={() => setSelectedTableId(t.id)}
+        {/* Master Content Area switcher */}
+        <main className="master-content-body">
+          {activeMasterTab === 'home' && (
+            <DashboardHome 
+              onNavigateToBlueprint={() => setActiveMasterTab('blueprint')}
+              userName={loggedInUserName}
+            />
+          )}
+
+          {activeMasterTab === 'blueprint' && (
+            <div className="blueprint-designer-workspace-wrapper">
+              
+              {/* Internal header for blueprint actions (Save, Export, Split View) */}
+              <div className="blueprint-sub-header">
+                <div className="sub-header-left">
+                  <span className="workspace-title-label">Database Blueprint / visual-schema</span>
+                </div>
+                <div className="sub-header-right">
+                  <button className="icon-btn" title="Share Project" onClick={() => showNotification('Sharing link copied!')}>
+                    <Share2 size={15} />
+                  </button>
+                  <button className="icon-btn" title="Project Settings" onClick={() => showNotification('Settings menu')}>
+                    <Settings size={15} />
+                  </button>
+                  <button 
+                    className="btn-secondary" 
+                    style={{ 
+                      backgroundColor: isSplitView ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
+                      borderColor: isSplitView ? 'var(--accent-blue)' : 'var(--border-color)',
+                      color: isSplitView ? 'var(--accent-blue)' : 'var(--text-primary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                    onClick={() => setIsSplitView(!isSplitView)}
                   >
-                    <span className="sidebar-item-name">
-                      <Database size={12} style={{ color: 'var(--accent-blue)' }} />
-                      {t.name}
-                    </span>
-                    <span className="sidebar-item-meta">{t.columns.length} columnas</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {activeMenuTab === 'RELATIONS' && (
-              <div className="sidebar-content-area">
-                <span className="sidebar-list-title">Relaciones ({relationLines.length})</span>
-                {relationLines.map((line) => (
-                  <div key={line.id} className="sidebar-list-item" onClick={() => setSelectedTableId(line.targetTableId)}>
-                    <span className="sidebar-item-name" style={{ fontSize: '10px' }}>
-                      <Link2 size={12} style={{ color: 'var(--accent-green)' }} />
-                      {line.id.replace('_to_', ' ➜ ').replace(/_[a-zA-Z0-9]+_/g, '.')}
-                    </span>
-                  </div>
-                ))}
-                {relationLines.length === 0 && (
-                  <p style={{ fontSize: '11px', color: 'var(--text-muted)', padding: '0 4px' }}>No hay relaciones creadas.</p>
-                )}
-              </div>
-            )}
-
-            {activeMenuTab === 'INDICES' && (
-              <div className="sidebar-content-area">
-                <span className="sidebar-list-title">Índices ({customIndices.length})</span>
-                {customIndices.map(idx => (
-                  <div key={idx.id} className="sidebar-list-item">
-                    <span className="sidebar-item-name">
-                      <Key size={12} style={{ color: 'var(--accent-purple)' }} />
-                      {idx.name}
-                    </span>
-                    <span className="sidebar-item-meta">{idx.tableName}.{idx.columnName}</span>
-                  </div>
-                ))}
-                <button 
-                  className="btn-new-table" 
-                  style={{ marginTop: '8px', fontSize: '11px' }}
-                  onClick={() => {
-                    const name = `idx_${selectedTable?.name.toLowerCase() || 'table'}_created_at`
-                    setCustomIndices(prev => [...prev, {
-                      id: `idx_${Date.now()}`,
-                      name,
-                      tableName: selectedTable?.name.toLowerCase() || 'users',
-                      columnName: 'created_at'
-                    }])
-                    showNotification(`Índice ${name} creado!`)
-                  }}
-                >
-                  <Plus size={11} />
-                  CREAR ÍNDICE
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="sidebar-bottom">
-            <div className="bottom-link" onClick={() => showNotification('Opening documentation...')}>
-              <FileText size={13} />
-              DOCS
-            </div>
-            <div className="bottom-link" onClick={() => showNotification('Database Status: Connected')}>
-              <Activity size={13} />
-              STATUS
-            </div>
-          </div>
-        </aside>
-
-        {isSplitView && (
-          <aside className="split-editor-panel">
-            <div className="macos-header">
-              <div className="macos-left">
-                <div className="macos-dots">
-                  <span className="macos-dot red" />
-                  <span className="macos-dot yellow" />
-                  <span className="macos-dot green" />
-                </div>
-                <span className="macos-title">
-                  {editorTab === 'shorthand' ? 'DataDraft DSL' : 'PostgreSQL Dialect'}
-                </span>
-              </div>
-              <div className="macos-actions">
-                <button 
-                  className="btn-macos-action"
-                  onClick={() => {
-                    const textToCopy = editorTab === 'shorthand' ? importCode : generateFullSQL()
-                    copyToClipboard(textToCopy)
-                  }}
-                  title="Copy to Clipboard"
-                >
-                  <Copy size={12} />
-                  Copy
-                </button>
-                <button 
-                  className="btn-macos-action primary"
-                  onClick={handleExportScript}
-                  title="Download .sql"
-                >
-                  <Download size={12} />
-                  SQL
-                </button>
-              </div>
-            </div>
-
-            <div className="editor-tabs-bar">
-              <button 
-                className={`editor-tab-button ${editorTab === 'shorthand' ? 'active' : ''}`}
-                onClick={() => setEditorTab('shorthand')}
-              >
-                Código Simple (DSL)
-              </button>
-              <button 
-                className={`editor-tab-button ${editorTab === 'sql' ? 'active' : ''}`}
-                onClick={() => setEditorTab('sql')}
-              >
-                PostgreSQL Script
-              </button>
-            </div>
-
-            <div className="split-textarea-wrapper">
-              {editorTab === 'shorthand' ? (
-                <div className="code-editor-container">
-                  <textarea
-                    className="code-editor-textarea"
-                    value={importCode}
-                    onChange={(e) => setImportCode(e.target.value)}
-                    placeholder="# Escribe tus tablas aquí..."
-                    spellCheck="false"
-                  />
-                  <pre 
-                    className="code-editor-highlight"
-                    dangerouslySetInnerHTML={{ __html: highlightShorthand(importCode) }}
-                  />
-                </div>
-              ) : (
-                <pre className="split-code-readonly">
-                  {generateFullSQL()}
-                </pre>
-              )}
-
-              {showToast && (
-                <div className="toast-bar-bottom">
-                  <div className="toast-text">
-                    <Check size={12} style={{ color: '#10b981' }} />
-                    {importError ? 'Error en código' : 'Script generado exitosamente'}
-                  </div>
-                  <button className="toast-dismiss" onClick={() => setShowToast(false)}>
-                    Dismiss
+                    <Code size={13} />
+                    Split View
+                  </button>
+                  <button className="btn-secondary" onClick={() => showNotification('Project saved successfully!')}>
+                    Save
+                  </button>
+                  <button className="btn-primary" onClick={handleExportScript}>
+                    <Download size={14} />
+                    Export Script
                   </button>
                 </div>
-              )}
-            </div>
-            
-            {importError && (
-              <div className="modal-error" style={{ margin: '8px', borderRadius: '4px' }}>
-                ⚠️ {importError}
               </div>
-            )}
-          </aside>
-        )}
 
-        {/* Editor Canvas */}
-        <main
-          className="canvas-grid"
-          ref={canvasRef}
-          onMouseDown={handleCanvasMouseDown}
-          onMouseMove={handleCanvasMouseMove}
-          onMouseUp={handleCanvasMouseUp}
-          onMouseLeave={handleCanvasMouseUp}
-        >
-          <div
-            className="canvas-content"
-            style={{
-              transform: `scale(${zoom / 100}) translate(${panOffset.x}px, ${panOffset.y}px)`,
-            }}
-          >
-            <svg className="connections-svg">
-              {relationLines.map((line) => (
-                <path
-                  key={line.id}
-                  d={line.path}
-                  className={`connection-line ${selectedTableId === line.targetTableId ? 'selected' : ''}`}
-                />
-              ))}
-            </svg>
+              {/* Workspace Area */}
+              <div className="workspace-body" style={{ height: 'calc(100% - 48px)' }}>
 
-            {filteredTables.length === 0 ? (
-              <div className="empty-canvas-message">
-                <h2>No Tables Found</h2>
-                <p>Click "+ NEW TABLE" to build database entities.</p>
-              </div>
-            ) : (
-              filteredTables.map((table) => (
-                <div
-                  key={table.id}
-                  className={`table-node ${selectedTableId === table.id ? 'selected' : ''}`}
-                  style={{
-                    left: `${table.x}px`,
-                    top: `${table.y}px`,
-                  }}
-                  onMouseDown={(e) => handleTableMouseDown(e, table.id)}
-                >
-                  <div className="table-node-header">
-                    <span className="table-node-title">{table.name}</span>
-                    <button
-                      className="icon-btn table-node-more"
-                      title="Delete Table"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleDeleteTable(table.id)
-                      }}
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                  <div className="table-node-columns">
-                    {table.columns.map((col) => (
-                      <div key={col.id} className="column-row">
-                        <div className="column-left">
-                          {col.isPrimaryKey ? (
-                            <Key className="column-key-icon" size={11} />
-                          ) : col.isForeignKey ? (
-                            <Link2 className="column-fk-icon" size={11} />
-                          ) : (
-                            <span style={{ width: 12 }} />
-                          )}
-                          <span className="column-name">{col.name}</span>
-                        </div>
-                        <span className="column-type">{col.type}</span>
+                {isSplitView && (
+                  <aside className="split-editor-panel">
+                    <div className="macos-header">
+                      <div className="macos-left">
+                        <span className="macos-title">DataDraft DSL</span>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+                      <div className="macos-actions">
+                        <button 
+                          className="macos-action-btn active"
+                          style={{ cursor: 'default' }}
+                        >
+                          DSL
+                        </button>
+                        <button 
+                          className="macos-action-btn"
+                          onClick={() => copyToClipboard(importCode)}
+                          title="Copy Shorthand Code"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    </div>
 
-          <div className="canvas-controls">
-            <button className="icon-btn" onClick={() => showNotification('Search canvas location')} title="Search Position">
-              <Search size={13} />
-            </button>
-            <div className="control-separator" />
-            <button className="icon-btn" onClick={zoomOut} title="Zoom Out">
-              <Minimize2 size={13} />
-            </button>
-            <span className="zoom-text" onClick={resetZoom} style={{ cursor: 'pointer' }}>
-              {zoom}%
-            </span>
-            <button className="icon-btn" onClick={zoomIn} title="Zoom In">
-              <Maximize2 size={13} />
-            </button>
-            <div className="control-separator" />
-            <button className="icon-btn" onClick={() => { setPanOffset({ x: 0, y: 0 }); resetZoom(); }} title="Recenter Canvas">
-              <HelpCircle size={13} />
-            </button>
-            <button className="icon-btn" onClick={() => showNotification('Grid snapping enabled!')} title="Grid layout toggled">
-              <Grid size={13} />
-            </button>
-          </div>
-        </main>
+                    <div className="split-textarea-wrapper" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', position: 'relative', height: 'calc(100% - 40px)' }}>
+                      <div className="code-editor-container" style={{ position: 'relative', width: '100%', height: '100%', flexGrow: 1 }}>
+                        <pre 
+                          className="code-editor-highlight"
+                          dangerouslySetInnerHTML={{ __html: highlightShorthand(importCode) }}
+                        />
+                        <textarea
+                          className="code-editor-textarea"
+                          value={importCode}
+                          onChange={(e) => setImportCode(e.target.value)}
+                          spellCheck="false"
+                        />
+                      </div>
+                    </div>
 
-        {/* Right side Properties Panel */}
-        <aside className={`right-panel ${isPropertiesCollapsed ? 'collapsed' : ''}`}>
-          <div 
-            className="properties-toggle-btn"
-            onClick={() => setIsPropertiesCollapsed(!isPropertiesCollapsed)}
-            title={isPropertiesCollapsed ? 'Expandir Propiedades' : 'Colapsar Propiedades'}
-          >
-            {isPropertiesCollapsed ? <ChevronLeft size={12} /> : <ChevronRight size={12} />}
-          </div>
-          {selectedTable ? (
-            <>
-              <div className="panel-header">
-                <h2>Table Properties</h2>
-                <button className="icon-btn" onClick={() => setSelectedTableId(null)}>
-                  <X size={15} />
-                </button>
-              </div>
+                    {importError && showToast && (
+                      <div className="toast-bar-bottom" style={{ margin: '8px', padding: '6px 12px', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', color: '#f87171' }}>
+                        <span>⚠️ {importError}</span>
+                        <button style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }} onClick={() => setShowToast(false)}>Dismiss</button>
+                      </div>
+                    )}
+                  </aside>
+                )}
 
-              <div className="panel-body">
-                <div className="form-group">
-                  <label className="form-label">Table Name</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={selectedTable.name}
-                    onChange={(e) => handleUpdateTableMeta({ name: e.target.value })}
-                  />
-                </div>
+                <main 
+                  className="canvas-grid"
+                  ref={canvasRef}
+                  onMouseDown={handleCanvasMouseDown}
+                  onMouseMove={handleCanvasMouseMove}
+                  onMouseUp={handleCanvasMouseUp}
+                >
+                  <div 
+                    className="canvas-content"
+                    style={{
+                      transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom / 100})`,
+                      transformOrigin: '0 0'
+                    }}
+                  >
+                    {/* SVG Connector lines */}
+                    <svg className="connections-svg" style={{ pointerEvents: 'none' }}>
+                      {relationLines.map((line) => (
+                        <path
+                          key={line.id}
+                          d={line.path}
+                          className={`connection-line ${selectedRelationId === line.id ? 'selected' : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedRelationId(line.id)
+                            setSelectedTableId(null)
+                          }}
+                          style={{ pointerEvents: 'visibleStroke', cursor: 'pointer' }}
+                        />
+                      ))}
 
-                <div className="form-group">
-                  <label className="form-label">Table Comment</label>
-                  <textarea
-                    className="form-textarea"
-                    value={selectedTable.comment}
-                    onChange={(e) => handleUpdateTableMeta({ comment: e.target.value })}
-                  />
-                </div>
+                      {relationDragging && (() => {
+                        const sourceTable = tables.find(t => t.id === relationDragging.sourceTableId)
+                        if (!sourceTable) return null
+                        const colIdx = sourceTable.columns.findIndex(c => c.id === relationDragging.sourceColumnId)
+                        if (colIdx === -1) return null
 
-                <div className="form-group">
-                  <div className="section-title-row">
-                    <label className="form-label">Columns ({selectedTable.columns.length})</label>
-                    <button className="btn-link-add" onClick={handleAddColumn}>
-                      <Plus size={11} />
-                      Add
-                    </button>
-                  </div>
+                        const rowHeight = 35
+                        const headerHeight = 38
+                        const sourceOnRight = sourceTable.x > relationDragging.currentX
+                        const xSource = sourceTable.x + (sourceOnRight ? 0 : 210)
+                        const ySource = sourceTable.y + headerHeight + colIdx * rowHeight + rowHeight / 2
 
-                  <div className="columns-edit-list">
-                    {selectedTable.columns.map((col) => (
-                      <div key={col.id} className="column-edit-item">
-                        <div className="column-edit-main">
-                          <input
-                            type="text"
-                            className="form-input"
-                            style={{ padding: '4px 8px', fontSize: '12px' }}
-                            value={col.name}
-                            onChange={(e) => handleUpdateColumn(col.id, { name: e.target.value })}
+                        const xTarget = relationDragging.currentX
+                        const yTarget = relationDragging.currentY
+
+                        const offset = Math.abs(xSource - xTarget) / 2
+                        const cp1x = sourceOnRight ? xSource - offset : xSource + offset
+                        const cp2x = sourceOnRight ? xTarget + offset : xTarget - offset
+
+                        const path = `M ${xSource} ${ySource} C ${cp1x} ${ySource}, ${cp2x} ${yTarget}, ${xTarget} ${yTarget}`
+
+                        return (
+                          <path
+                            d={path}
+                            stroke="#10b981"
+                            strokeWidth="2"
+                            strokeDasharray="4 4"
+                            fill="none"
                           />
-                          <select
-                            className="form-select"
-                            value={col.type}
-                            onChange={(e) => handleUpdateColumn(col.id, { type: e.target.value })}
-                          >
-                            {columnTypes.map((t) => (
-                              <option key={t} value={t}>
-                                {t}
-                              </option>
-                            ))}
-                          </select>
+                        )
+                      })()}
+                    </svg>
+
+                    {/* Floating Relation Delete Buttons */}
+                    {relationLines.map((line) => {
+                      if (selectedRelationId !== line.id) return null
+                      return (
+                        <button
+                          key={`del_${line.id}`}
+                          className="delete-relation-btn"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDeleteRelation(line.sourceTableId, line.sourceColumnId)
+                          }}
+                          style={{
+                            position: 'absolute',
+                            left: `${line.midX}px`,
+                            top: `${line.midY}px`,
+                            transform: 'translate(-50%, -50%)',
+                            backgroundColor: '#ef4444',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '50%',
+                            width: '18px',
+                            height: '18px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            boxShadow: '0 0 6px #ef4444',
+                            zIndex: 100,
+                            fontSize: '10px',
+                            lineHeight: 1
+                          }}
+                          title="Delete Relation"
+                        >
+                          ✕
+                        </button>
+                      )
+                    })}
+
+                    {/* Table Cards */}
+                    {filteredTables.map((table) => (
+                      <div
+                        key={table.id}
+                        className={`table-node ${selectedTableId === table.id ? 'selected' : ''}`}
+                        style={{
+                          left: `${table.x}px`,
+                          top: `${table.y}px`
+                        }}
+                      >
+                        <div
+                          className="table-node-header"
+                          onMouseDown={(e) => handleTableMouseDown(e, table.id)}
+                        >
+                          <Database size={12} className="header-icon" style={{ marginRight: '6px' }} />
+                          <span className="table-node-title">{table.name}</span>
                           <button
-                            className="column-edit-delete"
-                            onClick={() => handleDeleteColumn(col.id)}
-                            title="Delete Column"
+                            className="btn-delete-table"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDeleteTable(table.id)
+                            }}
+                            title="Eliminar Tabla"
+                            style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}
                           >
-                            <Trash2 size={12} />
+                            <Trash2 size={11} />
                           </button>
                         </div>
 
-                        <div className="column-edit-checkboxes">
-                          <label className="checkbox-label">
-                            <input
-                              type="checkbox"
-                              checked={col.isPrimaryKey}
-                              onChange={(e) =>
-                                handleUpdateColumn(col.id, {
-                                  isPrimaryKey: e.target.checked,
-                                  isForeignKey: e.target.checked ? false : col.isForeignKey
-                                })
-                              }
-                            />
-                            PK
-                          </label>
-
-                          <label className="checkbox-label">
-                            <input
-                              type="checkbox"
-                              checked={col.isForeignKey}
-                              onChange={(e) =>
-                                handleUpdateColumn(col.id, {
-                                  isForeignKey: e.target.checked,
-                                  isPrimaryKey: e.target.checked ? false : col.isPrimaryKey,
-                                  foreignKeyTargetTableId: e.target.checked
-                                    ? tables.find((t) => t.id !== selectedTable.id)?.id || ''
-                                    : undefined,
-                                  foreignKeyTargetColumnId: e.target.checked
-                                    ? tables.find((t) => t.id !== selectedTable.id)?.columns[0]?.id || ''
-                                    : undefined
-                                })
-                              }
-                            />
-                            FK
-                          </label>
-
-                          {col.isForeignKey && (
-                            <select
-                              className="form-select"
-                              style={{ padding: '2px 4px', fontSize: '10px' }}
-                              value={col.foreignKeyTargetTableId}
-                              onChange={(e) => {
-                                const targetTabId = e.target.value
-                                const targetTableObj = tables.find((t) => t.id === targetTabId)
-                                handleUpdateColumn(col.id, {
-                                  foreignKeyTargetTableId: targetTabId,
-                                  foreignKeyTargetColumnId: targetTableObj?.columns[0]?.id || ''
-                                })
+                        <div className="table-node-columns">
+                          {table.columns.map((col) => (
+                            <div
+                              key={col.id}
+                              className={`column-row ${col.isPrimaryKey ? 'primary-key-row' : ''} ${col.isForeignKey ? 'foreign-key-row' : ''}`}
+                              onMouseUp={(e) => {
+                                if (relationDragging) {
+                                  handleRelationDragEnd(e, table.id, col.id)
+                                }
                               }}
                             >
-                              {tables
-                                .filter((t) => t.id !== selectedTable.id)
-                                .map((t) => (
-                                  <option key={t.id} value={t.id}>
-                                    {t.name}
-                                  </option>
-                                ))}
-                            </select>
-                          )}
+                              <span className="col-name-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                {col.isPrimaryKey && <Key size={10} className="col-key-icon pk" style={{ color: '#f59e0b' }} />}
+                                {col.isForeignKey && <Link2 size={10} className="col-key-icon fk" style={{ color: '#10b981' }} />}
+                                <span className="col-name">{col.name}</span>
+                              </span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span className="col-type" style={{ color: '#64748b', fontSize: '11px' }}>{col.type}</span>
+                                <div 
+                                  className="relation-drag-dot" 
+                                  title="Drag to link relation"
+                                  onMouseDown={(e) => handleRelationDragStart(e, table.id, col.id)}
+                                  style={{
+                                    width: '8px',
+                                    height: '8px',
+                                    borderRadius: '50%',
+                                    backgroundColor: '#10b981',
+                                    cursor: 'crosshair',
+                                    border: '1.5px solid #0d1117',
+                                    boxShadow: '0 0 4px #10b981'
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     ))}
                   </div>
-                </div>
 
-                <div className="form-group" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
-                  <label className="form-label">Engine Settings</label>
-                  <div className="toggle-row">
-                    <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Audit Logging</span>
-                    <label className="switch">
-                      <input
-                        type="checkbox"
-                        checked={auditLogging}
-                        onChange={(e) => setAuditLogging(e.target.checked)}
-                      />
-                      <span className="slider" />
-                    </label>
-                  </div>
-                </div>
-
-                <div className="sql-preview-container">
-                  <div className="sql-header">
-                    <span className="form-label">SQL Preview</span>
-                    <button
-                      className="icon-btn"
-                      onClick={() => copyToClipboard(generateSQL(selectedTable))}
-                      title="Copy SQL"
-                    >
-                      {copied ? <Check size={13} style={{ color: '#10b981' }} /> : <Copy size={13} />}
+                  <div className="canvas-controls">
+                    <button className="icon-btn" onClick={() => showNotification('Search canvas location')} title="Search Position">
+                      <Search size={13} />
+                    </button>
+                    <div className="control-separator" />
+                    <button className="icon-btn" onClick={zoomOut} title="Zoom Out">
+                      <Minimize2 size={13} />
+                    </button>
+                    <span className="zoom-text" onClick={resetZoom} style={{ cursor: 'pointer' }}>
+                      {zoom}%
+                    </span>
+                    <button className="icon-btn" onClick={zoomIn} title="Zoom In">
+                      <Maximize2 size={13} />
+                    </button>
+                    <div className="control-separator" />
+                    <button className="icon-btn" onClick={() => { setPanOffset({ x: 0, y: 0 }); resetZoom(); }} title="Recenter Canvas">
+                      <HelpCircle size={13} />
+                    </button>
+                    <button className="icon-btn" onClick={() => showNotification('Grid snapping enabled!')} title="Grid layout toggled">
+                      <Grid size={13} />
                     </button>
                   </div>
-                  <pre className="sql-box">
-                    <span className="sql-keyword">CREATE TABLE</span> <span className="sql-string">"{selectedTable.name}"</span> ({"\n"}
-                    {selectedTable.columns.map((c, idx) => {
-                      let typeStr = c.type
-                      if (c.type === 'String') typeStr = 'UUID'
-                      if (c.type === 'Decimal') typeStr = 'DECIMAL(10,2)'
-                      const isLast = idx === selectedTable.columns.length - 1
-                      return (
-                        <span key={c.id}>
-                          {"  "}<span className="sql-string">"{c.name}"</span> <span className="sql-type">{typeStr.toUpperCase()}</span>
-                          {c.isPrimaryKey && <span className="sql-keyword"> PRIMARY KEY</span>}
-                          {!isLast && ","}{"\n"}
-                        </span>
-                      )
-                    })}
-                    );
-                  </pre>
-                </div>
+                </main>
+
+                {/* Right side Properties Panel */}
+                <aside className={`right-panel ${isPropertiesCollapsed ? 'collapsed' : ''}`}>
+                  <div 
+                    className="properties-toggle-btn"
+                    onClick={() => setIsPropertiesCollapsed(!isPropertiesCollapsed)}
+                    title={isPropertiesCollapsed ? 'Expandir Propiedades' : 'Colapsar Propiedades'}
+                  >
+                    {isPropertiesCollapsed ? <ChevronLeft size={12} /> : <ChevronRight size={12} />}
+                  </div>
+                  {selectedTable ? (
+                    <>
+                      <div className="panel-header">
+                        <h2>Table Properties</h2>
+                        <button className="icon-btn" onClick={() => setSelectedTableId(null)}>
+                          <X size={15} />
+                        </button>
+                      </div>
+
+                      <div className="panel-body">
+                        <div className="form-group">
+                          <label className="form-label">Table Name</label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            value={selectedTable.name}
+                            onChange={(e) => handleUpdateTableMeta({ name: e.target.value })}
+                          />
+                        </div>
+
+                        <div className="form-group">
+                          <label className="form-label">Table Comment</label>
+                          <textarea
+                            className="form-textarea"
+                            value={selectedTable.comment}
+                            onChange={(e) => handleUpdateTableMeta({ comment: e.target.value })}
+                          />
+                        </div>
+
+                        <div className="form-group">
+                          <div className="section-title-row">
+                            <label className="form-label">Columns ({selectedTable.columns.length})</label>
+                            <button className="btn-link-add" onClick={handleAddColumn}>
+                              <Plus size={11} />
+                              Add
+                            </button>
+                          </div>
+
+                          <div className="columns-edit-list">
+                            {selectedTable.columns.map((col) => (
+                              <div key={col.id} className="column-edit-item">
+                                <div className="column-edit-main">
+                                  <input
+                                    type="text"
+                                    className="form-input"
+                                    style={{ padding: '4px 8px', fontSize: '12px' }}
+                                    value={col.name}
+                                    onChange={(e) => handleUpdateColumn(col.id, { name: e.target.value })}
+                                  />
+                                  <select
+                                    className="form-select"
+                                    value={col.type}
+                                    onChange={(e) => handleUpdateColumn(col.id, { type: e.target.value })}
+                                  >
+                                    {columnTypes.map((t) => (
+                                      <option key={t} value={t}>
+                                        {t}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <button
+                                    className="column-edit-delete"
+                                    onClick={() => handleDeleteColumn(col.id)}
+                                    title="Delete Column"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                </div>
+
+                                <div className="column-edit-checkboxes">
+                                  <label className="checkbox-label">
+                                    <input
+                                      type="checkbox"
+                                      checked={col.isPrimaryKey}
+                                      onChange={(e) =>
+                                        handleUpdateColumn(col.id, {
+                                          isPrimaryKey: e.target.checked,
+                                          isForeignKey: e.target.checked ? false : col.isForeignKey
+                                        })
+                                      }
+                                    />
+                                    PK
+                                  </label>
+
+                                  <label className="checkbox-label">
+                                    <input
+                                      type="checkbox"
+                                      checked={col.isForeignKey}
+                                      onChange={(e) =>
+                                        handleUpdateColumn(col.id, {
+                                          isForeignKey: e.target.checked,
+                                          isPrimaryKey: e.target.checked ? false : col.isPrimaryKey,
+                                          foreignKeyTargetTableId: e.target.checked
+                                            ? tables.find((t) => t.id !== selectedTable.id)?.id || ''
+                                            : undefined,
+                                          foreignKeyTargetColumnId: e.target.checked
+                                            ? tables.find((t) => t.id !== selectedTable.id)?.columns[0]?.id || ''
+                                            : undefined
+                                        })
+                                      }
+                                    />
+                                    FK
+                                  </label>
+
+                                  {col.isForeignKey && (
+                                    <select
+                                      className="form-select"
+                                      style={{ padding: '2px 4px', fontSize: '10px' }}
+                                      value={col.foreignKeyTargetTableId}
+                                      onChange={(e) => {
+                                        const targetTabId = e.target.value
+                                        const targetTableObj = tables.find((t) => t.id === targetTabId)
+                                        handleUpdateColumn(col.id, {
+                                          foreignKeyTargetTableId: targetTabId,
+                                          foreignKeyTargetColumnId: targetTableObj?.columns[0]?.id || ''
+                                        })
+                                      }}
+                                    >
+                                      {tables
+                                        .filter((t) => t.id !== selectedTable.id)
+                                        .map((t) => (
+                                          <option key={t.id} value={t.id}>
+                                            {t.name}
+                                          </option>
+                                        ))}
+                                    </select>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="form-group" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                          <label className="form-label">Engine Settings</label>
+                          <div className="toggle-row">
+                            <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Audit Logging</span>
+                            <label className="switch">
+                              <input
+                                type="checkbox"
+                                checked={auditLogging}
+                                onChange={(e) => setAuditLogging(e.target.checked)}
+                              />
+                              <span className="slider" />
+                            </label>
+                          </div>
+                        </div>
+
+                        <div className="sql-preview-container">
+                          <div className="sql-header">
+                            <span className="form-label">SQL Preview</span>
+                            <button
+                              className="icon-btn"
+                              onClick={() => copyToClipboard(generateSQL(selectedTable))}
+                              title="Copy SQL"
+                            >
+                              {copied ? <Check size={13} style={{ color: '#10b981' }} /> : <Copy size={13} />}
+                            </button>
+                          </div>
+                          <pre className="sql-box">
+                            <span className="sql-keyword">CREATE TABLE</span> <span className="sql-string">"{selectedTable.name}"</span> ({"\n"}
+                            {selectedTable.columns.map((c, idx) => {
+                              let typeStr = c.type
+                              if (c.type === 'String') typeStr = 'UUID'
+                              if (c.type === 'Decimal') typeStr = 'DECIMAL(10,2)'
+                              const isLast = idx === selectedTable.columns.length - 1
+                              return (
+                                <span key={c.id}>
+                                  {"  "}<span className="sql-string">"{c.name}"</span> <span className="sql-type">{typeStr.toUpperCase()}</span>
+                                  {c.isPrimaryKey && <span className="sql-keyword"> PRIMARY KEY</span>}
+                                  {!isLast && ","}{"\n"}
+                                </span>
+                              )
+                            })}
+                            );
+                          </pre>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                      <h3>No Table Selected</h3>
+                      <p style={{ fontSize: '12px' }}>Click a table in the canvas to inspect its properties.</p>
+                    </div>
+                  )}
+                </aside>
               </div>
-            </>
-          ) : (
-            <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
-              <h3>No Table Selected</h3>
-              <p style={{ fontSize: '12px' }}>Click a table in the canvas to inspect its properties.</p>
+
             </div>
           )}
-        </aside>
+
+          {activeMasterTab !== 'home' && activeMasterTab !== 'blueprint' && activeMasterTab !== 'profile' && (
+            <div className="placeholder-tab-content" style={{ padding: '40px', color: 'var(--text-muted)', textAlign: 'center' }}>
+              <h2>{activeMasterTab.toUpperCase()} Module</h2>
+              <p style={{ fontSize: '14px', marginTop: '8px' }}>This component is fully active and synchronized with production environment.</p>
+            </div>
+          )}
+
+          {activeMasterTab === 'profile' && (
+            <UserProfileView
+              userName={loggedInUserName}
+              setAuthScreen={setAuthScreen}
+              showNotification={showNotification}
+            />
+          )}
+        </main>
+
+        {/* Master Bottom Status Bar */}
+        <footer className="master-bottom-status-bar">
+          <div className="status-left">
+            <span className="status-indicator">
+              <span className="status-dot green"></span>
+              Gateway: Connected
+            </span>
+            <span className="status-separator">•</span>
+            <span className="status-branch" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <GitBranch size={11} />
+              main @ 7f2a1b9
+            </span>
+          </div>
+          <div className="status-right">
+            <span>UTC: {new Date().toISOString().slice(11, 19)}</span>
+            <span className="status-separator">•</span>
+            <span>Node: v18.12.1</span>
+          </div>
+        </footer>
       </div>
-    </>
+    </div>
   )
 }
