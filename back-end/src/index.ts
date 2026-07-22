@@ -8,6 +8,7 @@ import taskAllocatorRouter from "./modules/task-allocator/taskAllocatorRouter.js
 import branchSyncRouter from "./modules/branch-sync/branchSyncRouter.js";
 import docGeneratorRouter from "./modules/doc-generator/docGeneratorRouter.js";
 import codeReviewRouter from "./modules/code-review/codeReviewRouter.js";
+import authRouter from "./modules/auth/authRouter.js";
 
 dotenv.config();
 
@@ -23,6 +24,7 @@ app.get("/api/health", (req, res) => {
 });
 
 // Feature routers
+app.use("/api/auth", authRouter);
 app.use("/api/db-designer", dbDesignerRouter);
 app.use("/api/task-allocator", taskAllocatorRouter);
 app.use("/api/branch-sync", branchSyncRouter);
