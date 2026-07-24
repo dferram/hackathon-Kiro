@@ -1,7 +1,17 @@
 import React, { useState } from 'react';
+import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+
+export interface BranchData {
+  id: string;
+  name: string;
+  color: string;
+  glow: string;
+  paths: string[];
+  commits: { id: string; x: number; y: number; label: string; r?: number }[];
+}
 
 // Real Git Data from the repository
-const branchesData = [
+const defaultBranchesData: BranchData[] = [
   {
     id: 'main',
     name: 'main',
@@ -138,9 +148,15 @@ const GeoNode = ({ cx, cy, r, color, filter }: { cx: number, cy: number, r: numb
 };
 
 
-const BioluminescentTree: React.FC = () => {
+interface BioluminescentTreeProps {
+  customBranchesData?: BranchData[] | null;
+}
+
+const BioluminescentTree: React.FC<BioluminescentTreeProps> = ({ customBranchesData }) => {
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
   const [isDragging, setIsDragging] = useState(false);
+  
+  const branchesData = customBranchesData && customBranchesData.length > 0 ? customBranchesData : defaultBranchesData;
 
   const handleWheel = (e: React.WheelEvent<SVGSVGElement>) => {
     const zoomAmount = e.deltaY * -0.002;
@@ -296,7 +312,7 @@ const BioluminescentTree: React.FC = () => {
           </filter>
         </defs>
 
-        <g transform={`translate(${transform.x}, ${transform.y}) scale(${transform.scale})`}>
+        <g transform={`translate(${transform.x}, ${transform.y}) translate(500, 475) scale(${transform.scale}) translate(-500, -475)`}>
           {/* Structured Canopy Background (Hexagonal web pattern) */}
         <g opacity="0.25" stroke="#a78bfa" strokeWidth="2" filter="url(#glow-purple)">
           {Array.from({ length: 9 }).map((_, i) => (
@@ -438,10 +454,20 @@ const BioluminescentTree: React.FC = () => {
       </svg>
 
       {/* Zoom Controls */}
-      <div style={{ position: 'absolute', bottom: '40px', right: '40px', display: 'flex', flexDirection: 'column', gap: '8px', pointerEvents: 'auto', zIndex: 10 }}>
-        <button onClick={handleZoomIn} style={{ background: 'rgba(20, 25, 40, 0.8)', border: '1px solid rgba(167, 139, 250, 0.3)', color: '#fff', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>+</button>
-        <button onClick={handleZoomOut} style={{ background: 'rgba(20, 25, 40, 0.8)', border: '1px solid rgba(167, 139, 250, 0.3)', color: '#fff', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>-</button>
-        <button onClick={handleZoomReset} style={{ background: 'rgba(20, 25, 40, 0.8)', border: '1px solid rgba(167, 139, 250, 0.3)', color: '#a78bfa', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '12px' }}>RESET</button>
+      <div style={{ position: 'absolute', bottom: '170px', right: '32px', display: 'flex', flexDirection: 'column', gap: '16px', pointerEvents: 'auto', zIndex: 10 }}>
+        <div style={{ background: 'rgba(10, 14, 25, 0.6)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '12px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
+          <button onClick={handleZoomIn} style={{ background: 'transparent', border: 'none', color: '#e2e8f0', padding: '12px', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <ZoomIn size={16} />
+          </button>
+          <div style={{ height: '1px', background: 'rgba(255, 255, 255, 0.05)', width: '100%' }}></div>
+          <button onClick={handleZoomOut} style={{ background: 'transparent', border: 'none', color: '#e2e8f0', padding: '12px', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <ZoomOut size={16} />
+          </button>
+        </div>
+        <button onClick={handleZoomReset} style={{ background: 'rgba(10, 14, 25, 0.6)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255, 255, 255, 0.05)', color: '#e2e8f0', padding: '10px 16px', borderRadius: '12px', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.2)', letterSpacing: '1px' }}>
+          <RotateCcw size={14} />
+          RESET
+        </button>
       </div>
     </div>
   );
