@@ -1,0 +1,927 @@
+/* ═══════════════════════════════════════════════════════════════
+   DEEPLINT – CODE OPTIMIZATION VIEW
+   Premium dark theme with glassmorphism accents
+════════════════════════════════════════════════════════════════ */
+
+/* ── Container ─────────────────────────────────────────────── */
+.deeplint-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background-color: #05070c;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* ── Top Header ────────────────────────────────────────────── */
+.deeplint-top-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 28px 16px 28px;
+  border-bottom: 1px solid #131924;
+  background-color: #0b0f17;
+  flex-shrink: 0;
+}
+
+.deeplint-title-group h1 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #f8fafc;
+  margin: 0;
+  letter-spacing: -0.3px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.deeplint-title-group h1 .deeplint-icon {
+  color: #38bdf8;
+}
+
+.deeplint-title-group p {
+  font-size: 12px;
+  color: #64748b;
+  margin: 4px 0 0 0;
+}
+
+.deeplint-repo-selector {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.deeplint-repo-selector label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #64748b;
+}
+
+.deeplint-repo-dropdown {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.deeplint-repo-input {
+  background-color: #070a0f;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #e2e8f0;
+  width: 280px;
+  outline: none;
+  transition: border-color 0.2s;
+  font-family: inherit;
+}
+
+.deeplint-repo-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+}
+
+.deeplint-repo-input::placeholder {
+  color: #4b5563;
+}
+
+.deeplint-analyze-btn {
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  border: none;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.deeplint-analyze-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.deeplint-analyze-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* ── Body (file explorer + code panels) ────────────────────── */
+.deeplint-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ── File Explorer ─────────────────────────────────────────── */
+.deeplint-file-explorer {
+  width: 200px;
+  background-color: #0b0f17;
+  border-right: 1px solid #131924;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+
+.deeplint-explorer-header {
+  padding: 12px 14px;
+  border-bottom: 1px solid #131924;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.deeplint-explorer-header svg {
+  opacity: 0.6;
+}
+
+.deeplint-file-list {
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  gap: 2px;
+  flex: 1;
+}
+
+.deeplint-file-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid transparent;
+}
+
+.deeplint-file-item:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+  border-color: #1e293b;
+}
+
+.deeplint-file-item.active {
+  background-color: rgba(56, 189, 248, 0.06);
+  border-color: rgba(56, 189, 248, 0.2);
+}
+
+.deeplint-file-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #e2e8f0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.deeplint-file-name svg {
+  color: #38bdf8;
+  flex-shrink: 0;
+}
+
+.deeplint-file-badge {
+  font-size: 9px;
+  font-weight: 600;
+  color: #10b981;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background-color: rgba(16, 185, 129, 0.1);
+  margin-left: 4px;
+  white-space: nowrap;
+}
+
+/* ── Code Panels Container ─────────────────────────────────── */
+.deeplint-code-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.deeplint-code-panels {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  gap: 0;
+}
+
+/* ── Individual Code Panel ─────────────────────────────────── */
+.deeplint-code-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.deeplint-code-panel + .deeplint-code-panel {
+  border-left: 2px solid #131924;
+}
+
+.deeplint-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background-color: #0d111a;
+  border-bottom: 1px solid #131924;
+  flex-shrink: 0;
+}
+
+.deeplint-panel-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.deeplint-panel-title svg {
+  color: #64748b;
+}
+
+.deeplint-panel-filepath {
+  font-size: 10px;
+  color: #4b5563;
+  font-family: 'Fira Code', 'Courier New', monospace;
+}
+
+.deeplint-panel-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.deeplint-badge-optimized {
+  font-size: 9px;
+  font-weight: 700;
+  color: #10b981;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background-color: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.deeplint-badge-refactored {
+  font-size: 9px;
+  font-weight: 500;
+  color: #64748b;
+  letter-spacing: 0.3px;
+}
+
+/* ── Code Block ────────────────────────────────────────────── */
+.deeplint-code-block {
+  flex: 1;
+  overflow: auto;
+  background-color: #090a0d;
+  padding: 0;
+  font-family: 'Fira Code', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.65;
+  counter-reset: line;
+}
+
+.deeplint-code-block pre {
+  margin: 0;
+  padding: 14px 0;
+}
+
+.deeplint-code-line {
+  display: flex;
+  padding: 0 16px 0 0;
+  min-height: 22px;
+  transition: background-color 0.1s;
+}
+
+.deeplint-code-line:hover {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+.deeplint-code-line.highlighted {
+  background-color: rgba(16, 185, 129, 0.06);
+  border-left: 2px solid #10b981;
+  padding-left: 0;
+}
+
+.deeplint-code-line.removed {
+  background-color: rgba(239, 68, 68, 0.06);
+  border-left: 2px solid #ef4444;
+  padding-left: 0;
+}
+
+.deeplint-line-number {
+  width: 44px;
+  text-align: right;
+  padding-right: 16px;
+  color: #334155;
+  user-select: none;
+  flex-shrink: 0;
+  font-size: 11px;
+}
+
+.deeplint-line-content {
+  flex: 1;
+  white-space: pre;
+  color: #e2e8f0;
+}
+
+/* Syntax highlighting */
+.dl-keyword {
+  color: #c084fc;
+  font-weight: 500;
+}
+
+.dl-type {
+  color: #38bdf8;
+}
+
+.dl-function {
+  color: #fbbf24;
+}
+
+.dl-string {
+  color: #34d399;
+}
+
+.dl-comment {
+  color: #4b5563;
+  font-style: italic;
+}
+
+.dl-operator {
+  color: #94a3b8;
+}
+
+.dl-boolean {
+  color: #f472b6;
+}
+
+.dl-property {
+  color: #e2e8f0;
+}
+
+.dl-number {
+  color: #fb923c;
+}
+
+.dl-error {
+  color: #ef4444;
+  text-decoration: wavy underline;
+  text-decoration-color: rgba(239, 68, 68, 0.5);
+}
+
+/* ── Changes Dialog ────────────────────────────────────────── */
+.deeplint-dialog-overlay {
+  position: absolute;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  animation: dialogFloat 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes dialogFloat {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.deeplint-dialog {
+  background: linear-gradient(145deg, #111827, #0f172a);
+  border: 1px solid #1e293b;
+  border-radius: 14px;
+  padding: 18px 22px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow:
+    0 20px 40px -10px rgba(0, 0, 0, 0.7),
+    0 0 0 1px rgba(255, 255, 255, 0.03),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  min-width: 420px;
+  max-width: 600px;
+  backdrop-filter: blur(20px);
+}
+
+.deeplint-dialog-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background-color: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #10b981;
+  flex-shrink: 0;
+}
+
+.deeplint-dialog-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.deeplint-dialog-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.deeplint-dialog-desc {
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
+.deeplint-dialog-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.deeplint-btn-decline {
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 7px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.deeplint-btn-decline:hover {
+  background-color: #334155;
+  border-color: #475569;
+}
+
+.deeplint-btn-accept {
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  border: none;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 18px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s;
+}
+
+.deeplint-btn-accept:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.deeplint-dialog-close {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s;
+}
+
+.deeplint-dialog-close:hover {
+  background-color: #334155;
+  color: #f8fafc;
+}
+
+/* ── Metrics Bar ───────────────────────────────────────────── */
+.deeplint-metrics-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  border-top: 1px solid #131924;
+  background-color: #0b0f17;
+  flex-shrink: 0;
+}
+
+.deeplint-metric-card {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-right: 1px solid #131924;
+  transition: background-color 0.2s;
+}
+
+.deeplint-metric-card:last-child {
+  border-right: none;
+}
+
+.deeplint-metric-card:hover {
+  background-color: rgba(255, 255, 255, 0.015);
+}
+
+.deeplint-metric-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: #64748b;
+}
+
+.deeplint-metric-value-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.deeplint-metric-value {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.deeplint-metric-value.red {
+  color: #ef4444;
+}
+
+.deeplint-metric-value.green {
+  color: #10b981;
+}
+
+.deeplint-metric-value.blue {
+  color: #38bdf8;
+}
+
+.deeplint-metric-value.cyan {
+  color: #22d3ee;
+}
+
+/* Mini sparkline / progress indicator */
+.deeplint-metric-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.deeplint-sparkline {
+  width: 48px;
+  height: 18px;
+  color: inherit;
+  opacity: 0.7;
+}
+
+.deeplint-progress-bar {
+  width: 60px;
+  height: 6px;
+  background-color: #1e293b;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.deeplint-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+.deeplint-progress-fill.blue {
+  background: linear-gradient(90deg, #3b82f6, #38bdf8);
+}
+
+.deeplint-progress-fill.green {
+  background: linear-gradient(90deg, #10b981, #34d399);
+}
+
+/* Toggle switch for execution speed */
+.deeplint-toggle-track {
+  width: 36px;
+  height: 20px;
+  background-color: #3b82f6;
+  border-radius: 10px;
+  position: relative;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.deeplint-toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 19px;
+  width: 14px;
+  height: 14px;
+  background-color: #fff;
+  border-radius: 50%;
+  transition: left 0.2s;
+}
+
+/* ── Loading State ─────────────────────────────────────────── */
+.deeplint-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 16px;
+  color: #64748b;
+}
+
+.deeplint-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #1e293b;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: deeplint-spin 0.8s linear infinite;
+}
+
+@keyframes deeplint-spin {
+  to { transform: rotate(360deg); }
+}
+
+.deeplint-loading p {
+  font-size: 13px;
+  margin: 0;
+}
+
+/* ── Empty / Welcome State ─────────────────────────────────── */
+.deeplint-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 16px;
+  padding: 40px;
+  text-align: center;
+}
+
+.deeplint-empty-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(99, 102, 241, 0.1));
+  border: 1px solid rgba(59, 130, 246, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #3b82f6;
+}
+
+.deeplint-empty-state h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #f8fafc;
+  margin: 0;
+}
+
+.deeplint-empty-state p {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0;
+  max-width: 400px;
+  line-height: 1.5;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RESPONSIVE BREAKPOINTS
+════════════════════════════════════════════════════════════ */
+
+/* ── Tablet (≤ 1024px) ─────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .deeplint-top-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px 20px;
+  }
+
+  .deeplint-repo-selector {
+    align-items: flex-start;
+    width: 100%;
+  }
+
+  .deeplint-repo-input {
+    width: 100%;
+    flex: 1;
+  }
+
+  .deeplint-repo-dropdown {
+    width: 100%;
+  }
+
+  .deeplint-file-explorer {
+    width: 160px;
+  }
+
+  .deeplint-dialog {
+    min-width: 340px;
+    max-width: 90%;
+  }
+
+  .deeplint-metric-card {
+    padding: 12px 14px;
+  }
+
+  .deeplint-metric-value {
+    font-size: 18px;
+  }
+}
+
+/* ── Mobile (≤ 768px) ──────────────────────────────────────── */
+@media (max-width: 768px) {
+  .deeplint-body {
+    flex-direction: column;
+  }
+
+  .deeplint-file-explorer {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid #131924;
+    max-height: 140px;
+    overflow-y: auto;
+  }
+
+  .deeplint-file-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: 8px;
+    gap: 4px;
+  }
+
+  .deeplint-file-item {
+    padding: 6px 10px;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .deeplint-code-panels {
+    flex-direction: column;
+  }
+
+  .deeplint-code-panel + .deeplint-code-panel {
+    border-left: none;
+    border-top: 2px solid #131924;
+  }
+
+  .deeplint-code-panel {
+    min-height: 200px;
+  }
+
+  .deeplint-metrics-bar {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .deeplint-metric-card:nth-child(2) {
+    border-right: none;
+  }
+
+  .deeplint-metric-card:nth-child(3),
+  .deeplint-metric-card:nth-child(4) {
+    border-top: 1px solid #131924;
+  }
+
+  .deeplint-dialog-overlay {
+    bottom: 100px;
+    left: 50%;
+    width: 92%;
+    max-width: 500px;
+  }
+
+  .deeplint-dialog {
+    min-width: unset;
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .deeplint-dialog-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+/* ── Small mobile (≤ 480px) ────────────────────────────────── */
+@media (max-width: 480px) {
+  .deeplint-top-header {
+    padding: 12px 14px;
+  }
+
+  .deeplint-title-group h1 {
+    font-size: 16px;
+  }
+
+  .deeplint-metrics-bar {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .deeplint-metric-value {
+    font-size: 16px;
+  }
+
+  .deeplint-panel-header {
+    padding: 8px 12px;
+  }
+
+  .deeplint-dialog {
+    padding: 14px 16px;
+    gap: 12px;
+  }
+}
+
+/* ── DeepLint Sidebar (replaces default sidebar) ───────────── */
+.deeplint-sidebar-repo-section {
+  padding: 12px 0;
+  border-bottom: 1px solid #131924;
+  margin-bottom: 8px;
+}
+
+.deeplint-sidebar-repo-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.deeplint-sidebar-repo-input {
+  background-color: #070a0f;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: #e2e8f0;
+  flex: 1;
+  min-width: 0;
+  outline: none;
+  transition: border-color 0.2s;
+  font-family: inherit;
+}
+
+.deeplint-sidebar-repo-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+}
+
+.deeplint-sidebar-repo-input::placeholder {
+  color: #4b5563;
+}
+
+.deeplint-sidebar-analyze-btn {
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  border: none;
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.deeplint-sidebar-analyze-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.deeplint-sidebar-analyze-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}

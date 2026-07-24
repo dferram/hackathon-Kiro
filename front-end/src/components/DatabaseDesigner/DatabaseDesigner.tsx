@@ -41,6 +41,7 @@ import type { Table, Column, DatabaseDesignerProps } from './types';
 import { DocifyView } from './DocifyView';
 import { highlightShorthand, serializeTablesToShorthand } from './utils';
 import MergeGuard from '../MergeGuard/MergeGuard';
+import { DeepLintSidebar, DeepLintView } from '../DeepLint/DeepLint';
 
 export default function DatabaseDesigner({
   setAuthScreen,
@@ -84,6 +85,10 @@ export default function DatabaseDesigner({
   // Bandwidth State
   const [bwTab, setBwTab] = useState<BwTab>('tree')
   const [bwSelectedBranch, setBwSelectedBranch] = useState<string | null>(null)
+
+  // DeepLint State
+  const [dlSelectedFileIdx, setDlSelectedFileIdx] = useState<number>(0)
+  const [dlRepoUrl, setDlRepoUrl] = useState<string>('')
   const [zoom, setZoom] = useState<number>(100)
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [auditLogging, setAuditLogging] = useState<boolean>(true)
@@ -985,6 +990,20 @@ export default function DatabaseDesigner({
             setBwTab={setBwTab} 
             selectedBranch={bwSelectedBranch} 
             setSelectedBranch={setBwSelectedBranch} 
+            onNavigateHome={() => setActiveMasterTab('home')}
+          />
+        ) : activeMasterTab === 'deeplint' ? (
+          <DeepLintSidebar
+            selectedFileIdx={dlSelectedFileIdx}
+            setSelectedFileIdx={setDlSelectedFileIdx}
+            repoUrl={dlRepoUrl}
+            setRepoUrl={setDlRepoUrl}
+            onAnalyze={() => {
+              if (dlRepoUrl.trim()) {
+                setDlSelectedFileIdx(0)
+                showNotification("Repository analyzed successfully.")
+              }
+            }}
             onNavigateHome={() => setActiveMasterTab('home')}
           />
         ) : (
@@ -2024,7 +2043,7 @@ export default function DatabaseDesigner({
             </div>
           )}
 
-          {activeMasterTab !== 'home' && activeMasterTab !== 'blueprint' && activeMasterTab !== 'profile' && activeMasterTab !== 'docify' && activeMasterTab !== 'mergeguard' && (
+          {activeMasterTab !== 'home' && activeMasterTab !== 'blueprint' && activeMasterTab !== 'profile' && activeMasterTab !== 'docify' && activeMasterTab !== 'mergeguard' && activeMasterTab !== 'deeplint' && (
             <div className="placeholder-tab-content" style={{ padding: '40px', color: 'var(--text-muted)', textAlign: 'center' }}>
               <h2>{activeMasterTab.toUpperCase()} Module</h2>
               <p style={{ fontSize: '14px', marginTop: '8px' }}>This component is fully active and synchronized with production environment.</p>
@@ -2033,6 +2052,10 @@ export default function DatabaseDesigner({
 
           {activeMasterTab === 'mergeguard' && (
             <MergeGuard />
+          )}
+
+          {activeMasterTab === 'deeplint' && (
+            <DeepLintView selectedFileIdx={dlSelectedFileIdx} />
           )}
 
           {activeMasterTab === 'docify' && (
