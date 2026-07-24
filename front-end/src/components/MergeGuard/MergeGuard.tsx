@@ -1,100 +1,169 @@
-import React, { useState } from 'react';
-import { Share2, Download, Activity, Link2, Loader2, GitBranch } from 'lucide-react';
+import React from 'react';
+import { Share2, Download, Activity, Loader2, GitBranch, ArrowLeft, FileText, Search, AlertTriangle, Shield } from 'lucide-react';
 import BioluminescentTree, { type BranchData } from './BioluminescentTree.tsx';
 import './MergeGuard.css';
 
-const MergeGuard: React.FC = () => {
-  const [repoUrl, setRepoUrl] = useState('');
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [treeData, setTreeData] = useState<BranchData[] | null>(null);
-  const [repoStats, setRepoStats] = useState({ branches: 8, conflicts: 2, health: 99.4 });
+// ══════════════════════════════════════════════════════════════════
+// MergeGuard Sidebar (follows BandwidthSidebar / DeepLintSidebar pattern)
+// ══════════════════════════════════════════════════════════════════
+export function MergeGuardSidebar({
+  repoUrl,
+  setRepoUrl,
+  onAnalyze,
+  isAnalyzing,
+  repoStats,
+  onNavigateHome,
+}: {
+  repoUrl: string
+  setRepoUrl: (url: string) => void
+  onAnalyze: () => void
+  isAnalyzing: boolean
+  repoStats: { branches: number; conflicts: number; health: number }
+  onNavigateHome: () => void
+}) {
+  return (
+    <div className="left-sidebar" style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: 'transparent', borderRight: 'none' }}>
 
-  const analyzeRepo = async () => {
-    if (!repoUrl) return;
-    setIsAnalyzing(true);
-    try {
-      let repoPath = repoUrl.replace('https://github.com/', '').replace('.git', '');
-      repoPath = repoPath.endsWith('/') ? repoPath.slice(0, -1) : repoPath;
-      
-      const res = await fetch(`https://api.github.com/repos/${repoPath}/branches`);
-      if (!res.ok) throw new Error('Failed to fetch branches');
-      
-      const branches = await res.json();
-      
-      branches.sort((a: any, b: any) => {
-        if (a.name === 'main' || a.name === 'master') return -1;
-        if (b.name === 'main' || b.name === 'master') return 1;
-        return 0;
-      });
+      {/* Header — back arrow + title */}
+      <div className="master-sidebar-logo-group" style={{ cursor: 'pointer', borderBottom: '1px solid #131924' }} onClick={onNavigateHome}>
+        <ArrowLeft size={16} style={{ color: '#94a3b8', marginRight: '8px' }} />
+        <div className="master-logo-text-group">
+          <span className="master-logo-text" style={{ fontSize: '13px' }}>MergeGuard</span>
+          <span className="master-logo-sub">branch visualization</span>
+        </div>
+      </div>
 
-      const displayBranches = branches.slice(0, 15);
-      const generatedData: BranchData[] = [];
-      const trunkX = 500;
-      const trunkStartY = 800;
-      
-      displayBranches.forEach((branch: any, index: number) => {
-        const isMain = branch.name === 'main' || branch.name === 'master';
-        
-        let color = '#4ade80';
-        let glow = 'glow-green';
-        if (branch.name.includes('feat')) { color = '#4ade80'; glow = 'glow-green'; }
-        else if (branch.name.includes('release')) { color = '#3b82f6'; glow = 'glow-blue'; }
-        else if (branch.name.includes('hotfix') || branch.name.includes('bug')) { color = '#f43f5e'; glow = 'glow-red'; }
-        else if (!isMain) { color = '#c084fc'; glow = 'glow-purple'; }
+      <div className="sidebar-top" style={{ padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: '8px', flex: 1, overflowY: 'auto' }}>
 
-        if (isMain) {
-          generatedData.push({
-            id: branch.name,
-            name: branch.name,
-            color,
-            glow,
-            paths: [
-              `M ${trunkX} ${trunkStartY - 300} L ${trunkX - 10} ${trunkStartY - 400} L ${trunkX + 10} ${trunkStartY - 500}`
-            ],
-            commits: [
-              { id: `c_${branch.name}_1`, x: trunkX, y: trunkStartY - 300, label: '', r: 24 },
-              { id: `c_${branch.name}_2`, x: trunkX - 10, y: trunkStartY - 400, label: '', r: 16 }
-            ]
-          });
-        } else {
-          const yStart = trunkStartY - 100 - (index * 45); 
-          const side = index % 2 === 0 ? 1 : -1;
-          
-          const xEnd = trunkX + (side * (220 + Math.random() * 80));
-          const yEnd = yStart - 100 - Math.random() * 60;
-          
-          const midX = trunkX + (side * 120);
-          const midY = yStart - 40;
-          
-          generatedData.push({
-            id: branch.name,
-            name: branch.name,
-            color,
-            glow,
-            paths: [
-              `M ${trunkX + (side * 15)} ${yStart} L ${midX} ${midY} L ${xEnd} ${yEnd}`
-            ],
-            commits: [
-              { id: `c_${branch.name}_mid`, x: midX, y: midY, label: 'Commit nodes', r: 16 },
-              { id: `c_${branch.name}_end`, x: xEnd, y: yEnd, label: branch.name, r: 18 }
-            ]
-          });
-        }
-      });
-      
-      setTreeData(generatedData);
-      setRepoStats({
-        branches: branches.length,
-        conflicts: Math.floor(Math.random() * 3),
-        health: (95 + Math.random() * 5)
-      });
-    } catch (e) {
-      console.error(e);
-      alert('Error fetching branches. Verifique la URL o los límites de API de GitHub.');
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
+        {/* Explorer card */}
+        <div className="explorer-card" style={{ marginBottom: '4px' }}>
+          <div className="explorer-icon-wrapper" style={{ background: 'rgba(74, 222, 128, 0.1)', color: '#4ade80' }}>
+            <Shield size={16} />
+          </div>
+          <div className="explorer-info">
+            <h3>Branch Guard</h3>
+            <p>Neural map &amp; conflict detection</p>
+          </div>
+        </div>
+
+        {/* Repository input */}
+        <div className="deeplint-sidebar-repo-section">
+          <span className="sidebar-list-title">Analyze Repository</span>
+          <div className="deeplint-sidebar-repo-input-row">
+            <input
+              className="deeplint-sidebar-repo-input"
+              type="text"
+              placeholder="github.com/owner/repo"
+              value={repoUrl}
+              onChange={(e) => setRepoUrl(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') onAnalyze() }}
+            />
+            <button
+              className="deeplint-sidebar-analyze-btn"
+              onClick={onAnalyze}
+              disabled={isAnalyzing || !repoUrl.trim()}
+              title="Analyze"
+            >
+              {isAnalyzing ? <Loader2 size={13} className="animate-spin" /> : <Search size={13} />}
+            </button>
+          </div>
+        </div>
+
+        {/* Live Stats */}
+        <div className="sidebar-menu" style={{ padding: 0, marginTop: '12px' }}>
+          <div className="menu-item active">
+            <Activity size={14} />
+            LIVE SNAPSHOT
+          </div>
+        </div>
+
+        <div className="sidebar-content-area">
+          <div className="sidebar-list-item" style={{ cursor: 'default' }}>
+            <span className="sidebar-item-name" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ color: '#4ade80', fontSize: '12px' }}>●</span>
+              Active Branches
+            </span>
+            <span className="sidebar-item-meta" style={{ color: '#4ade80', fontWeight: 600 }}>{repoStats.branches}</span>
+          </div>
+          <div className="sidebar-list-item" style={{ cursor: 'default' }}>
+            <span className="sidebar-item-name" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ color: '#f87171', fontSize: '12px' }}>●</span>
+              Active Conflicts
+            </span>
+            <span className="sidebar-item-meta" style={{ color: repoStats.conflicts > 0 ? '#f87171' : '#4ade80', fontWeight: 600 }}>{repoStats.conflicts}</span>
+          </div>
+          <div className="sidebar-list-item" style={{ cursor: 'default' }}>
+            <span className="sidebar-item-name" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ color: '#c084fc', fontSize: '12px' }}>●</span>
+              Sync Health
+            </span>
+            <span className="sidebar-item-meta" style={{ color: '#c084fc', fontWeight: 600 }}>{repoStats.health.toFixed(1)}%</span>
+          </div>
+        </div>
+
+        {/* Conflict warning */}
+        {repoStats.conflicts > 0 && (
+          <div className="sidebar-content-area" style={{ border: '1px solid rgba(248, 113, 113, 0.2)', background: 'rgba(248, 113, 113, 0.05)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <span className="sidebar-list-title" style={{ color: '#f87171', margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <AlertTriangle size={12} />
+                CONFLICTS DETECTED
+              </span>
+              <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{repoStats.conflicts} branch conflict(s) require attention</span>
+            </div>
+          </div>
+        )}
+
+        {/* Contributors */}
+        <div className="sidebar-menu" style={{ padding: 0, marginTop: '12px' }}>
+          <div className="menu-item">
+            <GitBranch size={14} />
+            TOP CONTRIBUTORS
+          </div>
+        </div>
+
+        <div className="sidebar-content-area">
+          <div className="sidebar-list-item" style={{ cursor: 'default' }}>
+            <span className="sidebar-item-name" style={{ fontSize: '11px' }}>Alex Rivera</span>
+            <span className="sidebar-item-meta">128</span>
+          </div>
+          <div className="sidebar-list-item" style={{ cursor: 'default' }}>
+            <span className="sidebar-item-name" style={{ fontSize: '11px' }}>Sarah Chen</span>
+            <span className="sidebar-item-meta">94</span>
+          </div>
+          <div className="sidebar-list-item" style={{ cursor: 'default' }}>
+            <span className="sidebar-item-name" style={{ fontSize: '11px' }}>Marco Rossi</span>
+            <span className="sidebar-item-meta">76</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="master-sidebar-footer" style={{ borderTop: '1px solid #131924' }}>
+        <div className="master-footer-item">
+          <FileText size={13} /><span>DOCS</span>
+        </div>
+        <div className="master-footer-item">
+          <Activity size={13} /><span>STATUS</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════
+// MergeGuard Main Component
+// ══════════════════════════════════════════════════════════════════
+interface MergeGuardProps {
+  repoUrl: string
+  setRepoUrl: (url: string) => void
+  isAnalyzing: boolean
+  treeData: BranchData[] | null
+  repoStats: { branches: number; conflicts: number; health: number }
+  onAnalyze: () => void
+}
+
+const MergeGuard: React.FC<MergeGuardProps> = ({ repoUrl, setRepoUrl, isAnalyzing, treeData, repoStats, onAnalyze }) => {
 
   return (
     <div className="mergeguard-container">
@@ -131,57 +200,8 @@ const MergeGuard: React.FC = () => {
         </defs>
       </svg>
 
-      {/* Top Left Actions (Replaced Header & Tooltip) */}
+      {/* Top Left Actions */}
       <div className="top-left-actions">
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          background: 'rgba(10, 14, 25, 0.6)',
-          backdropFilter: 'blur(12px)',
-          border: '1px solid rgba(255, 255, 255, 0.05)',
-          borderRadius: '8px',
-          padding: '8px 16px',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
-        }}>
-          <Link2 size={16} style={{ color: '#8a9cb0' }} />
-          <input
-            type="text"
-            value={repoUrl}
-            onChange={(e) => setRepoUrl(e.target.value)}
-            placeholder="https://github.com/owner/repo"
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: '#f8fafc',
-              fontSize: '13px',
-              outline: 'none',
-              width: '200px'
-            }}
-            onKeyDown={(e) => e.key === 'Enter' && analyzeRepo()}
-          />
-          <button
-            onClick={analyzeRepo}
-            disabled={isAnalyzing}
-            style={{
-              background: isAnalyzing ? 'rgba(255,255,255,0.1)' : 'rgba(59, 130, 246, 0.2)',
-              border: '1px solid rgba(59, 130, 246, 0.3)',
-              color: isAnalyzing ? '#8a9cb0' : '#3b82f6',
-              borderRadius: '6px',
-              padding: '6px 12px',
-              fontSize: '12px',
-              fontWeight: 600,
-              cursor: isAnalyzing ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
-          >
-            {isAnalyzing ? <Loader2 size={13} className="animate-spin" /> : <GitBranch size={13} />}
-            Analyze
-          </button>
-        </div>
-
         <div className="glass-pill">
           <Activity size={14} color="#a78bfa" />
           Bioluminescent Neural Map
